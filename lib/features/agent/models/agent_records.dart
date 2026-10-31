@@ -3,25 +3,12 @@ import 'package:drift/drift.dart';
 
 enum McpTransport { streamableHttp, sse }
 
-/// Request headers are stored as one secure-storage value, never server config.
+/// Validated HTTP headers shared by server settings and MCP requests.
 class McpCredentials {
   McpCredentials({Map<String, String> headers = const {}})
     : headers = Map.unmodifiable(headers);
 
   final Map<String, String> headers;
-
-  static const _prefix = 'servllama-mcp-headers:v1:';
-
-  factory McpCredentials.fromStored(String value) {
-    if (value.isEmpty) return McpCredentials();
-    if (!value.startsWith(_prefix)) {
-      throw const FormatException('Invalid MCP headers');
-    }
-    final json = jsonDecode(value.substring(_prefix.length)) as Map;
-    return McpCredentials(headers: Map<String, String>.from(json));
-  }
-
-  String encode() => _prefix + jsonEncode(headers);
 
   void validate() {
     if (headers.length > 16) {
@@ -61,14 +48,14 @@ class McpServer {
     required this.url,
     this.enabled = true,
     this.transport = McpTransport.streamableHttp,
-    this.secretRef,
+    this.headers = const {},
     this.revision = 1,
     this.tools = const [],
   });
   final String id, name, url;
   final bool enabled;
   final McpTransport transport;
-  final String? secretRef;
+  final Map<String, String> headers;
   final int revision;
   final List<Map<String, dynamic>> tools;
   static String toolPrefix(String id) =>
@@ -93,7 +80,7 @@ class McpServer {
     'url': url,
     'enabled': enabled,
     'transport': transport.name,
-    'secretRef': secretRef,
+    'headers': headers,
     'revision': revision,
     'tools': tools,
   };
@@ -103,7 +90,9 @@ class McpServer {
     url: j['url'],
     enabled: j['enabled'] as bool? ?? true,
     transport: McpTransport.values.byName(j['transport'] ?? 'streamableHttp'),
-    secretRef: j['secretRef'],
+    headers: Map.unmodifiable(
+      Map<String, String>.from(j['headers'] ?? const {}),
+    ),
     revision: j['revision'] ?? 1,
     tools: (j['tools'] as List? ?? [])
         .map((v) => Map<String, dynamic>.from(v))

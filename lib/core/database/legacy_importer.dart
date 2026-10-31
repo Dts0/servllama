@@ -4,9 +4,6 @@ import 'dart:convert';
 import 'package:hive/hive.dart';
 import 'package:path/path.dart' as p;
 import 'package:servllama/core/database/app_database.dart';
-import 'package:servllama/core/security/secret_store.dart';
-import 'package:servllama/core/storage/server_prefs_keys.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:servllama/features/chat/models/chat_message_record.dart';
 import 'package:servllama/features/chat/models/chat_message_version_record.dart';
 import 'package:servllama/features/chat/models/chat_session_record.dart';
@@ -53,11 +50,6 @@ class LegacyImporter {
   }
 
   Future<void> run({bool skipLegacyData = false}) async {
-    final prefs = await SharedPreferences.getInstance();
-    final oldKey = prefs.getString(ServerPrefsKeys.apiKey);
-    if (oldKey != null && oldKey.isNotEmpty) {
-      await SecretStore.instance.write(ServerPrefsKeys.apiKey, oldKey);
-    }
     final importChats = await db.metadata(chatsMarker) != '1';
     final importInventory = await db.metadata(inventoryMarker) != '1';
     final names = [
@@ -75,9 +67,6 @@ class LegacyImporter {
         importChats: importChats,
         importInventory: importInventory,
       );
-      if (oldKey != null && !await prefs.remove(ServerPrefsKeys.apiKey)) {
-        throw StateError('Legacy credential cleanup failed');
-      }
       if (hasLegacyFiles) {
         AppLogger.instance.event(
           'storage.migration.skipped',
@@ -236,10 +225,6 @@ class LegacyImporter {
             fields: {'records': total},
           );
         }
-      }
-      // Credentials are outside SQLite; only retire the old preference after commit.
-      if (oldKey != null && !await prefs.remove(ServerPrefsKeys.apiKey)) {
-        throw StateError('Legacy credential cleanup failed');
       }
       report(LegacyMigrationStage.complete);
     } catch (error) {

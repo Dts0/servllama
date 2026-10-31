@@ -7,9 +7,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:servllama/core/database/app_database.dart';
-import 'package:servllama/core/utils/new_id.dart';
 import 'package:servllama/core/security/log_redactor.dart';
-import 'package:servllama/core/security/secret_store.dart';
 import 'package:servllama/features/agent/models/agent_records.dart';
 import 'package:servllama/features/agent/models/web_search.dart';
 import 'package:servllama/features/agent/repositories/agent_repository.dart';
@@ -31,11 +29,8 @@ class AgentToolService extends ChangeNotifier {
   }) : _logger = logger ?? AppLogger.instance,
        skills = SkillService(repository, root, logger: logger),
        webSearch = webSearch ?? WebSearchService(logger: logger) {
-    mcp = McpConnectionManager(
-      repository: repository,
-      credentialsFor: credentialsFor,
-      logger: _logger,
-    )..addListener(_changed);
+    mcp = McpConnectionManager(repository: repository, logger: _logger)
+      ..addListener(_changed);
   }
   final AppLogger _logger;
   static AgentToolService? current;
@@ -50,25 +45,6 @@ class AgentToolService extends ChangeNotifier {
   }
 
   void _changed() => notifyListeners();
-  Future<McpCredentials> credentialsFor(
-    McpServer server, {
-    bool allowMissing = false,
-  }) async {
-    final raw = server.secretRef == null
-        ? null
-        : await SecretStore.instance.read(server.secretRef!);
-    if (raw == null && server.secretRef != null && !allowMissing) {
-      throw StateError('MCP credential unavailable');
-    }
-    return McpCredentials.fromStored(raw ?? '');
-  }
-
-  /// Returns the editable request headers for a stored server.
-  Future<Map<String, String>> mcpHeadersFor(McpServer server) async {
-    final stored = await credentialsFor(server, allowMissing: true);
-    return {...stored.headers};
-  }
-
   Future<void> saveMcp(
     McpServer draft, {
     required Map<String, String> headers,
@@ -78,38 +54,15 @@ class AgentToolService extends ChangeNotifier {
         .where((s) => s.id == draft.id)
         .firstOrNull;
     final credentials = McpCredentials(headers: headers)..validate();
-    final previousCredentials = previous == null
-        ? McpCredentials()
-        : await credentialsFor(previous, allowMissing: true);
-    String? ref = previous?.secretRef;
-    final unchanged =
-        mapEquals(previousCredentials.headers, credentials.headers) &&
-        (ref != null) == credentials.headers.isNotEmpty;
-    if (!unchanged) {
-      ref = credentials.headers.isEmpty ? null : 'mcp:${draft.id}:${newId()}';
-      if (ref != null) {
-        await SecretStore.instance.write(ref, credentials.encode());
-      }
-    }
     final saved = McpServer.fromJson({
       ...draft.toJson(),
-      'secretRef': ref,
+      'headers': credentials.headers,
       'revision': (previous?.revision ?? 0) + 1,
     });
-    try {
-      await repository.saveServer(saved);
-    } catch (_) {
-      if (ref != null && ref != previous?.secretRef) {
-        await SecretStore.instance.delete(ref);
-      }
-      rethrow;
-    }
+    await repository.saveServer(saved);
     mcp.upsert(saved);
     await revalidate();
     notifyListeners();
-    if (previous?.secretRef != null && previous!.secretRef != ref) {
-      await SecretStore.instance.delete(previous.secretRef!);
-    }
     _logger.event(
       'agent.mcp.saved',
       channel: LogChannel.agent,
@@ -145,9 +98,6 @@ class AgentToolService extends ChangeNotifier {
     mcp.remove(server.id);
     await revalidate();
     notifyListeners();
-    if (server.secretRef != null) {
-      await SecretStore.instance.delete(server.secretRef!);
-    }
     _logger.event(
       'agent.mcp.deleted',
       channel: LogChannel.agent,

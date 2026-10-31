@@ -15,6 +15,7 @@ import 'package:servllama/core/logging/app_logger.dart';
 import 'package:servllama/core/logging/file_log_sink.dart';
 import 'package:servllama/core/services/native_licenses.dart';
 import 'package:servllama/app/bootstrap/bootstrap_gate.dart';
+import 'package:servllama/core/database/credential_migration.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -62,6 +63,7 @@ Future<void> _initializeBusiness(
   final watch = Stopwatch()..start();
   AppLogger.instance.event('app.initialize.started');
   try {
+    await CredentialMigration(await AppDatabase.shared()).run();
     await ChatSessionRepository(
       onMigrationProgress: report,
       skipLegacyImport: skipLegacyImport,

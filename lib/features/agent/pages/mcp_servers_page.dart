@@ -378,7 +378,7 @@ class _McpEditorState extends State<McpEditor> {
   late bool enabled = original.enabled;
   late McpTransport transport = original.transport;
   late List<Map<String, dynamic>> tools = original.tools;
-  bool busy = false, headersLoaded = false, headersLoadFailed = false;
+  bool busy = false;
   McpServer get draft => McpServer.fromJson({
     ...original.toJson(),
     'name': name.text.trim(),
@@ -392,7 +392,11 @@ class _McpEditorState extends State<McpEditor> {
   @override
   void initState() {
     super.initState();
-    _loadHeaders();
+    headers.addAll(
+      original.headers.entries.map(
+        (entry) => _McpHeaderDraft(entry.key, entry.value),
+      ),
+    );
   }
 
   @override
@@ -403,40 +407,6 @@ class _McpEditorState extends State<McpEditor> {
       header.dispose();
     }
     super.dispose();
-  }
-
-  Future<void> _loadHeaders() async {
-    try {
-      final stored = await context.read<AgentToolService>().mcpHeadersFor(
-        original,
-      );
-      if (!mounted) return;
-      setState(() {
-        headers
-          ..clear()
-          ..addAll(
-            stored.entries.map(
-              (entry) => _McpHeaderDraft(entry.key, entry.value),
-            ),
-          );
-        headersLoaded = true;
-        headersLoadFailed = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        headersLoaded = true;
-        headersLoadFailed = true;
-      });
-    }
-  }
-
-  void _retryHeaders() {
-    setState(() {
-      headersLoaded = false;
-      headersLoadFailed = false;
-    });
-    _loadHeaders();
   }
 
   Map<String, String> _headerValues() {
@@ -507,8 +477,7 @@ class _McpEditorState extends State<McpEditor> {
   Widget build(BuildContext context) {
     final s = context.read<AgentToolService>();
     final l = context.l10n;
-    final canEditHeaders = headersLoaded && !headersLoadFailed;
-    final canSubmit = canEditHeaders && !busy;
+    final canSubmit = !busy;
     return AppScaffold(
       appBar: AppBar(title: Text(l.v2Mcp)),
       body: FormListView(
@@ -562,35 +531,19 @@ class _McpEditorState extends State<McpEditor> {
           SettingsSection.form(
             title: l.v2McpHeaders,
             children: [
-              if (!headersLoaded) const LinearProgressIndicator(),
-              if (headersLoadFailed) ...[
-                Text(
-                  l.v2OperationFailed,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+              for (var i = 0; i < headers.length; i++)
+                _McpHeaderRow(
+                  index: i,
+                  header: headers[i],
+                  enabled: !busy,
+                  onDelete: () => _removeHeader(i),
                 ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton(
-                    onPressed: _retryHeaders,
-                    child: Text(l.v2ToolRetryLoad),
-                  ),
-                ),
-              ],
-              if (canEditHeaders) ...[
-                for (var i = 0; i < headers.length; i++)
-                  _McpHeaderRow(
-                    index: i,
-                    header: headers[i],
-                    enabled: !busy,
-                    onDelete: () => _removeHeader(i),
-                  ),
-                OutlinedButton.icon(
-                  key: const Key('mcp_add_header'),
-                  onPressed: busy ? null : _addHeader,
-                  icon: const Icon(Icons.add, size: 20),
-                  label: Text(l.v2AddHeader),
-                ),
-              ],
+              OutlinedButton.icon(
+                key: const Key('mcp_add_header'),
+                onPressed: busy ? null : _addHeader,
+                icon: const Icon(Icons.add, size: 20),
+                label: Text(l.v2AddHeader),
+              ),
             ],
           ),
           SettingsSection.form(

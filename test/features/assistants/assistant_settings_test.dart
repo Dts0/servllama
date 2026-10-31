@@ -7,7 +7,6 @@ import 'package:servllama/app/providers/app_locale_provider.dart';
 import 'package:servllama/core/database/app_database.dart';
 import 'package:servllama/core/models/model_asset.dart';
 import 'package:servllama/core/repositories/unified_model_repository.dart';
-import 'package:servllama/core/security/secret_store.dart';
 import 'package:servllama/core/services/app_l10n_service.dart';
 import 'package:servllama/core/storage/app_prefs_keys.dart';
 import 'package:servllama/core/storage/kv_storage.dart';
@@ -330,7 +329,7 @@ void main() {
         isFalse,
       );
       expect(
-        run.authorizedBy(a, connection.changed({'secretRef': 'rotated'})),
+        run.authorizedBy(a, connection.changed({'credentialRevision': 1})),
         isFalse,
       );
       expect(
@@ -406,7 +405,7 @@ void main() {
     () async {
       final original = await repository.saveConnection(
         connection,
-        newSecret: 'old-fixture-secret',
+        key: 'old-fixture-secret',
       );
       await db.execute(
         "CREATE TRIGGER reject_connection BEFORE UPDATE ON ai_connections BEGIN SELECT RAISE(ABORT,'fixture'); END",
@@ -414,20 +413,17 @@ void main() {
       await expectLater(
         repository.saveConnection(
           connection.changed({'baseUrl': 'https://other.example'}),
-          newSecret: 'new-fixture-secret',
+          key: 'new-fixture-secret',
         ),
         throwsA(anything),
       );
       final saved = (await repository.connections()).singleWhere(
         (c) => c.id == connection.id,
       );
-      expect(saved.secretRef, original.secretRef);
+      expect(saved.credentialRevision, original.credentialRevision);
       expect(saved.baseUrl, connection.baseUrl);
-      expect(
-        await SecretStore.instance.read(saved.secretRef!),
-        'old-fixture-secret',
-      );
-      expect(jsonEncode(saved.toJson()), isNot(contains('fixture-secret')));
+      expect(saved.apiKey, 'old-fixture-secret');
+      expect(jsonEncode(saved.toJson()), contains('fixture-secret'));
     },
   );
   Widget app(Widget child) => ChangeNotifierProvider.value(

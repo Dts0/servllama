@@ -35,7 +35,6 @@ class AssistantProvider extends ChangeNotifier {
   String? activeId, error;
   bool loaded = false;
   bool _disposed = false;
-  final Map<String, String> _credentials = {};
   Future<void> _assistantUpdateQueue = Future.value();
   Assistant? get active =>
       assistants.where((a) => a.id == activeId).firstOrNull;
@@ -92,7 +91,6 @@ class AssistantProvider extends ChangeNotifier {
       profile = restoredProfile;
       activeId = restoredId;
       assets = restoredAssets;
-      _pruneCredentials();
       error = null;
       loaded = true;
       _assetsReconciled = reconcileAssets;
@@ -178,11 +176,7 @@ class AssistantProvider extends ChangeNotifier {
   Future<void> saveConnection(AiConnection c, {String? key}) async {
     await _requireLoaded();
     try {
-      final saved = await (await repository).saveConnection(c, newSecret: key);
-      if (!_disposed && key?.isNotEmpty == true && saved.secretRef != null) {
-        // The repository already verified the durable write before commit.
-        _credentials[saved.secretRef!] = key!;
-      }
+      await (await repository).saveConnection(c, key: key);
       _logger.event(
         'client.connection.saved',
         channel: LogChannel.client,
@@ -198,7 +192,6 @@ class AssistantProvider extends ChangeNotifier {
       rethrow;
     } finally {
       connections = await (await repository).connections();
-      _pruneCredentials();
       assistants = await (await repository).assistants();
       await AgentToolService.current?.revalidate();
       notifyListeners();
@@ -224,7 +217,6 @@ class AssistantProvider extends ChangeNotifier {
       rethrow;
     } finally {
       connections = await (await repository).connections();
-      _pruneCredentials();
       assistants = await (await repository).assistants();
       await AgentToolService.current?.revalidate();
       notifyListeners();
@@ -243,50 +235,9 @@ class AssistantProvider extends ChangeNotifier {
   AiConnection? connection(String? id) =>
       connections.where((c) => c.id == id).firstOrNull;
 
-  /// A process-local projection, never part of the persisted provider config.
-  /// Editors initialize from this snapshot instead of filling an empty field.
-  String? cachedCredential(AiConnection c) =>
-      c.secretRef == null ? '' : _credentials[c.secretRef];
-
-  final Map<String, Future<String>> _credentialReads = {};
-
-  Future<String> credential(AiConnection c) {
-    final cached = cachedCredential(c);
-    if (cached != null) return Future.value(cached);
-    final ref = c.secretRef!;
-    return _credentialReads[ref] ??= _readCredential(ref);
-  }
-
-  Future<String> _readCredential(String ref) async {
-    try {
-      final value = await (await repository).secrets.read(ref);
-      if (value == null) {
-        // A missing persisted secret must not become an editable empty key.
-        throw StateError('Saved credential unavailable; retry or replace it');
-      }
-      if (!_disposed && _credentialReads.containsKey(ref)) {
-        _credentials[ref] = value;
-      }
-      return value;
-    } finally {
-      _credentialReads.remove(ref);
-    }
-  }
-
-  void _pruneCredentials() {
-    final refs = connections
-        .map((c) => c.secretRef)
-        .whereType<String>()
-        .toSet();
-    _credentials.removeWhere((ref, _) => !refs.contains(ref));
-    _credentialReads.removeWhere((ref, _) => !refs.contains(ref));
-  }
-
   @override
   void dispose() {
     _disposed = true;
-    _credentials.clear();
-    _credentialReads.clear();
     super.dispose();
   }
 
@@ -304,7 +255,7 @@ class AssistantProvider extends ChangeNotifier {
     try {
       return await client.listModels(
         draft,
-        typedKey.isNotEmpty ? typedKey : await credential(draft),
+        typedKey.isNotEmpty ? typedKey : draft.apiKey,
         cancelToken: cancelToken,
       );
     } finally {
@@ -322,7 +273,7 @@ class AssistantProvider extends ChangeNotifier {
     try {
       await client.test(
         draft,
-        typedKey.isNotEmpty ? typedKey : await credential(draft),
+        typedKey.isNotEmpty ? typedKey : draft.apiKey,
         model,
         cancelToken: cancelToken,
       );

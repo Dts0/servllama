@@ -1003,11 +1003,8 @@ void main() {
       final saved = await tester.runAsync(
         () async => (await tools.repository.servers()).single,
       );
-      final savedHeaders = await tester.runAsync(
-        () => tools.mcpHeadersFor(saved!),
-      );
-      expect(savedHeaders, {'X-Test': 'header-value'});
-      expect(saved!.enabled, isFalse);
+      expect(saved!.headers, {'X-Test': 'header-value'});
+      expect(saved.enabled, isFalse);
       expect(find.text('Disabled'), findsOneWidget);
       expect(find.byTooltip('Delete'), findsNothing);
 

@@ -35,7 +35,8 @@ class ChatRunConfig {
             currentConnection.id == connection.id &&
             currentConnection.baseUrl == connection.baseUrl &&
             currentConnection.protocol == connection.protocol &&
-            currentConnection.secretRef == connection.secretRef &&
+            currentConnection.credentialRevision ==
+                connection.credentialRevision &&
             (!capabilities.supportsTools ||
                 currentConnection.capabilitiesFor(modelId).supportsTools) &&
             (!capabilities.supportsImages ||
@@ -49,6 +50,7 @@ class ChatRunConfig {
       ..remove('avatar')
       ..remove('chatTarget'),
     'connection': connection.toJson()
+      ..remove('apiKey')
       ..remove('sortOrder')
       ..remove('modelNames')
       ..['models'] = [modelId]

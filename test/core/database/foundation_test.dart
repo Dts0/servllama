@@ -6,7 +6,6 @@ import 'package:servllama/core/database/app_database.dart';
 import 'package:servllama/core/database/legacy_importer.dart';
 import 'package:servllama/core/runtime/resource_coordinator.dart';
 import 'package:servllama/core/security/log_redactor.dart';
-import 'package:servllama/core/security/secret_store.dart';
 import 'package:servllama/core/storage/server_prefs_keys.dart';
 
 void main() {
@@ -68,20 +67,16 @@ void main() {
       expect(await db.metadata(LegacyImporter.inventoryMarker), '1');
       expect(await source.readAsBytes(), bytes);
       expect(
-        await SecretStore.instance.read(ServerPrefsKeys.apiKey),
-        'legacy-server-key',
-      );
-      expect(
         (await SharedPreferences.getInstance()).getString(
           ServerPrefsKeys.apiKey,
         ),
-        isNull,
+        'legacy-server-key',
       );
       expect(await LegacyImporter.hasPendingImport(db, dir), isFalse);
     },
   );
   test(
-    'secret copy is verified before legacy plaintext is removed; rerun is safe',
+    'legacy import preserves ordinary server preferences and rerun is safe',
     () async {
       final db = AppDatabase.memory();
       final dir = await Directory.systemTemp.createTemp('v2-import');
@@ -98,14 +93,10 @@ void main() {
       await importer.run();
       expect(await db.metadata('legacyImportComplete'), '1');
       expect(
-        await SecretStore.instance.read(ServerPrefsKeys.apiKey),
-        'migration-secret',
-      );
-      expect(
         (await SharedPreferences.getInstance()).getString(
           ServerPrefsKeys.apiKey,
         ),
-        isNull,
+        'migration-secret',
       );
     },
   );

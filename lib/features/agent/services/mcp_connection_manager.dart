@@ -18,16 +18,11 @@ class McpActiveConnection {
 /// App-scoped MCP sessions. Configuration changes replace stale sessions, and
 /// chat runs borrow the same clients instead of creating short-lived copies.
 class McpConnectionManager extends ChangeNotifier {
-  McpConnectionManager({
-    required AgentRepository repository,
-    required Future<McpCredentials> Function(McpServer server) credentialsFor,
-    AppLogger? logger,
-  }) : _repository = repository,
-       _credentialsFor = credentialsFor,
-       _logger = logger ?? AppLogger.instance;
+  McpConnectionManager({required AgentRepository repository, AppLogger? logger})
+    : _repository = repository,
+      _logger = logger ?? AppLogger.instance;
 
   final AgentRepository _repository;
-  final Future<McpCredentials> Function(McpServer server) _credentialsFor;
   final AppLogger _logger;
   final Map<String, _McpSession> _sessions = {};
   final Set<void Function(String serverId)> _toolChangeListeners = {};
@@ -207,7 +202,7 @@ class McpConnectionManager extends ChangeNotifier {
       previous.enabled != next.enabled ||
       previous.url != next.url ||
       previous.transport != next.transport ||
-      previous.secretRef != next.secretRef;
+      !mapEquals(previous.headers, next.headers);
 
   Future<bool> _ensureConnected(_McpSession session) async {
     if (!session.server.enabled) return false;
@@ -251,11 +246,9 @@ class McpConnectionManager extends ChangeNotifier {
     );
     McpClient? client;
     try {
-      final credentials = await _credentialsFor(session.server);
       if (!_isCurrent(session, generation) || !session.server.enabled) return;
       client = McpClient(
         session.server,
-        headers: credentials.headers,
         logger: _logger,
         onToolsChanged: () {
           unawaited(_refreshToolsAfterNotification(session, generation));
