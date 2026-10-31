@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:servllama/app/app.dart';
+import 'package:servllama/app/app_theme.dart';
 import 'package:servllama/app/main_scaffold.dart';
 import 'package:servllama/app/bootstrap/bootstrap_gate.dart';
 import 'package:servllama/app/bootstrap/migration_flow_view.dart';
@@ -11,6 +12,7 @@ import 'package:servllama/l10n/generated/app_localizations.dart';
 import 'package:servllama/features/chat/providers/chat_provider.dart';
 import 'package:servllama/features/downloads/providers/model_discovery_provider.dart';
 import 'package:servllama/features/speech/services/speech_job_service.dart';
+import 'package:servllama/shared/widgets/bundled_svg_asset.dart';
 
 import '../support/app_startup_fixture.dart';
 
@@ -71,6 +73,26 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(fixture.assistants.loaded, isTrue);
     pending.complete();
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox());
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('both fixed MCP tints are supported before idle preparation', (
+    tester,
+  ) async {
+    final fixture = AppStartupFixture();
+    await tester.pumpWidget(ServLlamaApp(scope: fixture.scope));
+    final cache = tester
+        .element(find.byType(MainScaffold))
+        .read<BundledSvgCache>();
+    const asset = 'assets/ai-icons/mcp.svg';
+    for (final theme in [AppTheme.light(), AppTheme.dark()]) {
+      final colors = theme.colorScheme;
+      expect(cache.supports(asset, colors.onSurfaceVariant), isTrue);
+      expect(cache.supports(asset, colors.outline), isTrue);
+      expect(cache.bytecode(asset, colors.outline), isNull);
+    }
     await tester.pumpAndSettle();
     await tester.pumpWidget(const SizedBox());
     expect(tester.takeException(), isNull);

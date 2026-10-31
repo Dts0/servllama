@@ -4,6 +4,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 
+const _mcpAsset = 'assets/ai-icons/mcp.svg';
+
+// This monochrome mark shares one compiled shape; its tint is paint-only.
+Color _compilationColor(String asset, Color color) =>
+    asset == _mcpAsset ? const Color(0xff000000) : color;
+
 /// Retains compiled bytes for the fixed app palette, not GPU pictures.
 /// flutter_svg owns picture decoding, layout, painting and resource disposal.
 class BundledSvgCache {
@@ -28,10 +34,12 @@ class BundledSvgCache {
           ? color == const Color(0xff000000)
           : asset.startsWith('assets/ai-icons/') &&
                 asset.endsWith('.svg') &&
-                (asset.endsWith('/mcp.svg') ? _mcpColors : _identityColors)
-                    .contains(color));
+                (asset == _mcpAsset ? _mcpColors : _identityColors).contains(
+                  color,
+                ));
 
-  ByteData? bytecode(String asset, Color color) => _bytecode[(asset, color)];
+  ByteData? bytecode(String asset, Color color) =>
+      _bytecode[(asset, _compilationColor(asset, color))];
 
   Future<void> warmUp({
     required Iterable<Color> identityColors,
@@ -45,8 +53,7 @@ class BundledSvgCache {
       if (!asset.startsWith('assets/ai-icons/') || !asset.endsWith('.svg')) {
         continue;
       }
-      for (final color
-          in asset.endsWith('/mcp.svg') ? _mcpColors : _identityColors) {
+      for (final color in asset == _mcpAsset ? _mcpColors : _identityColors) {
         await load(asset, color, bundle: assets);
       }
     }
@@ -54,7 +61,8 @@ class BundledSvgCache {
   }
 
   Future<ByteData> load(String asset, Color color, {AssetBundle? bundle}) {
-    final key = (asset, color);
+    final compiledColor = _compilationColor(asset, color);
+    final key = (asset, compiledColor);
     final ready = _bytecode[key];
     if (ready != null) return SynchronousFuture(ready);
     final pending = _pending[key];
@@ -66,7 +74,7 @@ class BundledSvgCache {
         .then(
           (data) => SvgBytesLoader(
             Uint8List.sublistView(data),
-            theme: SvgTheme(currentColor: color),
+            theme: SvgTheme(currentColor: compiledColor),
           ).loadBytes(null),
         )
         .then((data) {
@@ -110,9 +118,16 @@ class BundledSvgAsset extends StatelessWidget {
     final cache = context.read<BundledSvgCache?>();
     if (cache?.supports(asset, currentColor) == true) {
       return SvgPicture(
-        _BundledSvgLoader(cache!, asset, currentColor),
+        _BundledSvgLoader(
+          cache!,
+          asset,
+          _compilationColor(asset, currentColor),
+        ),
         width: width,
         height: height,
+        colorFilter: asset == _mcpAsset
+            ? ColorFilter.mode(currentColor, BlendMode.srcIn)
+            : null,
       );
     }
     return _fallback();

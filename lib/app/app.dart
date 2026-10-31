@@ -62,7 +62,9 @@ class _ServLlamaAppState extends State<ServLlamaApp> {
               ];
               cache.configureColors(
                 identityColors: colors.map((c) => c.onSurface),
-                mcpColors: colors.map((c) => c.onSurfaceVariant),
+                mcpColors: colors.expand(
+                  (c) => [c.onSurfaceVariant, c.outline],
+                ),
               );
               return cache;
             },
@@ -247,7 +249,7 @@ class _ServLlamaAppState extends State<ServLlamaApp> {
             asset,
         'assets/app_icon.svg',
       ];
-      // One compiled SVG per idle slot; rendering remains framework-owned.
+      // One compiled SVG per idle slot. MCP's paint-only tints share this load.
       for (final asset in assets) {
         final tints = asset == 'assets/app_icon.svg'
             ? {const Color(0xff000000)}

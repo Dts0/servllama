@@ -102,6 +102,15 @@ Ready bytes are available synchronously, while demand consumers join compilation
 and keep stable dimensions. Current-theme preparation is an optimization, not a
 requirement for correct first-frame rendering.
 
+The monochrome MCP mark uses one neutral compiled shape and framework paint-time
+tinting. Both fixed `onSurfaceVariant` (settings/list) and `outline` (empty state)
+colors in the light/dark palettes use this shared loader. Preparing or displaying
+either consumer also prepares the other, even before idle warmup reaches the
+mark; size and tint changes do not start a second compilation. Other, potentially
+multicolor logos retain color-aware compilation and unsupported tints retain the
+framework fallback. This adds no startup gate, extra MCP warmup slot or app-owned
+GPU picture cache.
+
 Asset reads stay on the UI isolate. Only SVG XML bytes and the immutable color
 theme enter flutter_svg's compiler, via `SvgBytesLoader`. Do not pass a live
 `rootBundle`/`CachingAssetBundle` to the compiler's `SvgAssetLoader`: in the
@@ -138,6 +147,8 @@ Those host tests are not sufficient for the Release compiler: flutter_svg
 `tool/verify_bundled_svg.dart` is a separate Release-only entrypoint that primes
 real bundle string caches, then checks actual rendered alpha pixels for every
 mark in both palettes, demand coalescing, route reentry and fallback colors.
+MCP checks also cover both real consumer tints, shared compiled bytes and unchanged
+rendered RGBA colors rather than merely accepting an eventually visible fallback.
 It opens no business database or settings. On an idle test device, build it with:
 
 ```text

@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import 'package:servllama/app/app_theme.dart';
 import 'package:servllama/shared/widgets/ai_identity_icon.dart';
 import 'package:servllama/shared/widgets/bundled_svg_asset.dart';
+import 'package:servllama/shared/widgets/mcp_icon.dart';
 
 void main() {
   testWidgets('all warmed marks paint nonempty framework-equivalent pixels', (
@@ -20,7 +21,9 @@ void main() {
     await tester.runAsync(
       () => cache.warmUp(
         identityColors: themes.map((t) => t.colorScheme.onSurface),
-        mcpColors: themes.map((t) => t.colorScheme.onSurfaceVariant),
+        mcpColors: themes.expand(
+          (t) => [t.colorScheme.onSurfaceVariant, t.colorScheme.outline],
+        ),
       ),
     );
     addTearDown(cache.dispose);
@@ -33,29 +36,31 @@ void main() {
     ];
     for (final asset in assets) {
       for (final theme in themes) {
-        final color = asset == 'assets/app_icon.svg'
-            ? const Color(0xff000000)
+        final colors = asset == 'assets/app_icon.svg'
+            ? {const Color(0xff000000)}
             : asset.endsWith('/mcp.svg')
-            ? theme.colorScheme.onSurfaceVariant
-            : theme.colorScheme.onSurface;
-        expect(cache.supports(asset, color), isTrue);
-        final actual = await _pixels(
-          tester,
-          Provider.value(
-            value: cache,
-            child: BundledSvgAsset(asset, currentColor: color),
-          ),
-        );
-        expect(
-          _opaquePixels(actual),
-          greaterThan(100),
-          reason: '$asset $color',
-        );
-        final expected = await _pixels(
-          tester,
-          SvgPicture.asset(asset, theme: SvgTheme(currentColor: color)),
-        );
-        expect(actual, expected, reason: '$asset $color');
+            ? {theme.colorScheme.onSurfaceVariant, theme.colorScheme.outline}
+            : {theme.colorScheme.onSurface};
+        for (final color in colors) {
+          expect(cache.supports(asset, color), isTrue);
+          final actual = await _pixels(
+            tester,
+            Provider.value(
+              value: cache,
+              child: BundledSvgAsset(asset, currentColor: color),
+            ),
+          );
+          expect(
+            _opaquePixels(actual),
+            greaterThan(100),
+            reason: '$asset $color',
+          );
+          final expected = await _pixels(
+            tester,
+            SvgPicture.asset(asset, theme: SvgTheme(currentColor: color)),
+          );
+          expect(actual, expected, reason: '$asset $color');
+        }
       }
     }
     await tester.pumpWidget(const SizedBox());
@@ -120,6 +125,105 @@ void main() {
     expect(cache.bytecode(asset, color), isNull);
     expect(cache.supports(asset, color), isFalse);
   });
+
+  testWidgets('MCP list and empty-state demand join one pending compilation', (
+    tester,
+  ) async {
+    final cache = BundledSvgCache();
+    addTearDown(cache.dispose);
+    final themes = [AppTheme.light(), AppTheme.dark()];
+    final colors = themes.expand(
+      (t) => [t.colorScheme.onSurfaceVariant, t.colorScheme.outline],
+    );
+    cache.configureColors(identityColors: [], mcpColors: colors);
+    const asset = 'assets/ai-icons/mcp.svg';
+    final bundle = _BlockedMcpBundle();
+    final pending = colors
+        .map((c) => cache.load(asset, c, bundle: bundle))
+        .toList();
+    for (final future in pending) {
+      expect(identical(future, pending.first), isTrue);
+    }
+    expect(bundle.loads, 1);
+    await tester.runAsync(() async {
+      bundle.ready.complete(await rootBundle.load(asset));
+      final bytes = await pending.first;
+      for (final color in colors) {
+        expect(cache.bytecode(asset, color), same(bytes));
+        expect(await cache.load(asset, color, bundle: bundle), same(bytes));
+      }
+    });
+    expect(bundle.loads, 1);
+    expect(cache.supports(asset, const Color(0xff12ab34)), isFalse);
+  });
+
+  for (final theme in [AppTheme.light(), AppTheme.dark()]) {
+    testWidgets(
+      '${theme.brightness.name} MCP empty state reuses the settings load before idle warmup',
+      (tester) async {
+        final cache = BundledSvgCache();
+        addTearDown(cache.dispose);
+        final colors = theme.colorScheme;
+        cache.configureColors(
+          identityColors: [],
+          mcpColors: [colors.onSurfaceVariant, colors.outline],
+        );
+        const asset = 'assets/ai-icons/mcp.svg';
+        final source = _CountingBundle();
+        // Only the list tint has been requested; empty-state preparation has
+        // not run. A fallback read is deliberately blocked to detect bypass.
+        await tester.runAsync(
+          () => cache.load(asset, colors.onSurfaceVariant, bundle: source),
+        );
+        final fallback = _BlockedMcpBundle();
+        Widget host(Widget child) => Theme(
+          data: theme,
+          child: DefaultAssetBundle(
+            bundle: fallback,
+            child: Provider.value(
+              value: cache,
+              child: Center(child: child),
+            ),
+          ),
+        );
+        final settings = await _pixels(tester, host(const McpIcon(size: 22)));
+        expect(_opaquePixels(settings), greaterThan(100));
+        final settingsLoader = tester
+            .widget<SvgPicture>(find.byType(SvgPicture))
+            .bytesLoader;
+        for (var visit = 0; visit < 2; visit++) {
+          final empty = await _pixels(
+            tester,
+            host(McpIcon(size: 40, color: colors.outline)),
+          );
+          expect(_opaquePixels(empty), greaterThan(100));
+          final picture = tester.widget<SvgPicture>(find.byType(SvgPicture));
+          expect(picture.bytesLoader, settingsLoader);
+          expect(picture.bytesLoader, isNot(isA<SvgAssetLoader>()));
+          expect(
+            picture.colorFilter,
+            ColorFilter.mode(colors.outline, BlendMode.srcIn),
+          );
+          final expected = await _pixels(
+            tester,
+            Center(
+              child: SvgPicture.asset(
+                asset,
+                width: 40,
+                height: 40,
+                theme: SvgTheme(currentColor: colors.outline),
+              ),
+            ),
+          );
+          expect(empty, expected);
+          await tester.pumpWidget(const SizedBox());
+        }
+        expect(source.loads[asset], 1);
+        expect(fallback.loads, 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 
   testWidgets('dispose during compilation does not retain late results', (
     tester,
@@ -259,6 +363,17 @@ class _DelayedBundle extends CachingAssetBundle {
   final ready = Completer<ByteData>();
   @override
   Future<ByteData> load(String key) => ready.future;
+}
+
+class _BlockedMcpBundle extends CachingAssetBundle {
+  final ready = Completer<ByteData>();
+  var loads = 0;
+  @override
+  Future<ByteData> load(String key) {
+    if (key != 'assets/ai-icons/mcp.svg') return rootBundle.load(key);
+    loads++;
+    return ready.future;
+  }
 }
 
 class _RetryBundle extends CachingAssetBundle {

@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:servllama/app/app_theme.dart';
 import 'package:servllama/shared/widgets/bundled_svg_asset.dart';
+import 'package:servllama/shared/widgets/mcp_icon.dart';
 
 void main() {
   if (!kReleaseMode) {
@@ -42,7 +43,9 @@ class _SvgVerifierState extends State<_SvgVerifier> {
     super.initState();
     _cache.configureColors(
       identityColors: _themes.map((t) => t.colorScheme.onSurface),
-      mcpColors: _themes.map((t) => t.colorScheme.onSurfaceVariant),
+      mcpColors: _themes.expand(
+        (t) => [t.colorScheme.onSurfaceVariant, t.colorScheme.outline],
+      ),
     );
     WidgetsBinding.instance.addPostFrameCallback((_) => _verify());
   }
@@ -63,19 +66,42 @@ class _SvgVerifierState extends State<_SvgVerifier> {
       if (assets.length < 2) throw StateError('Bundled SVG assets missing.');
       for (final asset in assets) {
         for (final theme in _themes) {
-          final color = asset == 'assets/app_icon.svg'
-              ? const Color(0xff000000)
-              : asset.endsWith('/mcp.svg')
-              ? theme.colorScheme.onSurfaceVariant
-              : theme.colorScheme.onSurface;
-          final first = _cache.load(asset, color);
-          final second = _cache.load(asset, color);
-          if (!identical(await first, await second)) {
-            throw StateError('Demand did not join compilation: $asset');
-          }
-          // Reentry must reuse compiled bytes and still paint a live picture.
-          for (var visit = 0; visit < 2; visit++) {
-            await _checkPixels(asset, color, theme);
+          final mcp = asset.endsWith('/mcp.svg');
+          final colors = asset == 'assets/app_icon.svg'
+              ? {const Color(0xff000000)}
+              : mcp
+              ? {theme.colorScheme.onSurfaceVariant, theme.colorScheme.outline}
+              : {theme.colorScheme.onSurface};
+          ByteData? sharedMcpBytes;
+          for (final color in colors) {
+            if (!_cache.supports(asset, color)) {
+              throw StateError('Fixed tint bypasses the cache: $asset $color');
+            }
+            final first = _cache.load(asset, color);
+            final second = _cache.load(asset, color);
+            final bytes = await first;
+            if (!identical(bytes, await second)) {
+              throw StateError('Demand did not join compilation: $asset');
+            }
+            if (mcp) {
+              if (sharedMcpBytes != null && !identical(bytes, sharedMcpBytes)) {
+                throw StateError('MCP tints compiled separate shapes.');
+              }
+              sharedMcpBytes = bytes;
+            }
+            // Reentry must reuse compiled bytes and still paint a live picture.
+            for (var visit = 0; visit < 2; visit++) {
+              await _checkPixels(
+                asset,
+                color,
+                theme,
+                size: mcp
+                    ? color == theme.colorScheme.outline
+                          ? 40
+                          : 22
+                    : 48,
+              );
+            }
           }
         }
         // Unsupported/animated palette values take the framework asset path.
@@ -90,15 +116,23 @@ class _SvgVerifierState extends State<_SvgVerifier> {
     }
   }
 
-  Future<void> _checkPixels(String asset, Color color, ThemeData theme) async {
+  Future<void> _checkPixels(
+    String asset,
+    Color color,
+    ThemeData theme, {
+    double size = 48,
+  }) async {
+    final mcp = asset.endsWith('/mcp.svg');
     setState(() {
       _theme = theme;
-      _mark = BundledSvgAsset(
-        asset,
-        currentColor: color,
-        width: 48,
-        height: 48,
-      );
+      _mark = mcp
+          ? McpIcon(size: size, color: color)
+          : BundledSvgAsset(
+              asset,
+              currentColor: color,
+              width: size,
+              height: size,
+            );
     });
     // The fallback path is asynchronous; allow decoding but never accept an
     // indefinitely empty widget as a passing test.
@@ -114,8 +148,21 @@ class _SvgVerifierState extends State<_SvgVerifier> {
           format: ui.ImageByteFormat.rawRgba,
         ))!.buffer.asUint8List();
         opaque = 0;
+        var solid = 0;
+        final tint = color.toARGB32();
         for (var i = 3; i < rgba.length; i += 4) {
           if (rgba[i] != 0) opaque++;
+          if (mcp && rgba[i] == 255) {
+            solid++;
+            if (rgba[i - 3] != (tint >> 16 & 255) ||
+                rgba[i - 2] != (tint >> 8 & 255) ||
+                rgba[i - 1] != (tint & 255)) {
+              throw StateError('Incorrect MCP paint tint: $color');
+            }
+          }
+        }
+        if (mcp && opaque > 100 && solid == 0) {
+          throw StateError('No opaque MCP tint pixels: $color');
         }
       } finally {
         image.dispose();
@@ -146,7 +193,11 @@ class _SvgVerifierState extends State<_SvgVerifier> {
             Padding(padding: const EdgeInsets.all(16), child: Text(_status)),
             RepaintBoundary(
               key: _boundary,
-              child: SizedBox(width: 48, height: 48, child: _mark),
+              child: SizedBox(
+                width: 48,
+                height: 48,
+                child: Center(child: _mark),
+              ),
             ),
           ],
         ),
