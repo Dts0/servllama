@@ -14,8 +14,8 @@ import zipfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DSP_NAMES = {f"libggml-htp-v{version}.so" for version in (73, 75, 79, 81)}
-REQUIRED = DSP_NAMES | {
+REQUIRED_DSP_NAMES = {f"libggml-htp-v{version}.so" for version in (73, 75, 79, 81)}
+REQUIRED = REQUIRED_DSP_NAMES | {
     "libflutter.so",
     "libllama-server.so",
     "libMNN.so",
@@ -92,7 +92,7 @@ def audit(apk, manifest_path, jni_directory):
             try:
                 machine, loads = elf_loads(data)
                 record.update(machine=machine, load_segments=loads)
-                if name in DSP_NAMES:
+                if name.startswith("libggml-htp-") and name.endswith(".so"):
                     original = jni_directory / name
                     if machine != 164:
                         errors.append(f"{name}: expected Hexagon ELF")

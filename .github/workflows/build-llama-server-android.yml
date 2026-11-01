@@ -6,12 +6,12 @@ on:
       llama_cpp_tag:
         description: llama.cpp tag to build.
         required: true
-        default: v0.4.1
+        default: v0.8.0
         type: string
       hexagon_patch:
-        description: Hexagon patch (skip unsupported devices; matches v0.4.1).
+        description: Hexagon patch (skip unsupported devices; for v0.4.1 only).
         required: true
-        default: true
+        default: false
         type: boolean
 
 permissions:
@@ -23,7 +23,7 @@ concurrency:
 
 env:
   ANDROID_ABI: arm64-v8a
-  SNAPDRAGON_IMAGE: ghcr.io/snapdragon-toolchain/arm64-android:v0.7
+  SNAPDRAGON_IMAGE: ghcr.io/snapdragon-toolchain/arm64-android:v0.8
 
 jobs:
   build-arm64:
@@ -169,10 +169,17 @@ jobs:
           test -f "${jni_dir}/libllama-server.so"
           test -f "${jni_dir}/libggml-opencl.so"
           test -f "${jni_dir}/libggml-hexagon.so"
-          test -f "${jni_dir}/libggml-htp-v73.so"
-          test -f "${jni_dir}/libggml-htp-v75.so"
-          test -f "${jni_dir}/libggml-htp-v79.so"
-          test -f "${jni_dir}/libggml-htp-v81.so"
+          # The selected tag defines the DSP targets, including v85 on newer releases.
+          mapfile -t htp_architectures < <(sed -nE \
+            's/^[[:space:]]*build_htp_skel\((v[0-9]+)\).*/\1/p' \
+            llama.cpp/ggml/src/ggml-hexagon/CMakeLists.txt)
+          if (( ${#htp_architectures[@]} == 0 )); then
+            echo "No Hexagon DSP targets found in the selected llama.cpp source." >&2
+            exit 1
+          fi
+          for architecture in "${htp_architectures[@]}"; do
+            test -f "${jni_dir}/libggml-htp-${architecture}.so"
+          done
           test -f "${meta}"
           # shellcheck disable=SC1090
           source "${meta}"
