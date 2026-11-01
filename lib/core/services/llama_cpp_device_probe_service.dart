@@ -53,12 +53,15 @@ class LlamaCppDeviceProbeService {
       final nativeLibraryDir = await _nativeLibraryDirService
           .getNativeLibraryDir();
       final binaryPath = '$nativeLibraryDir/$_binaryFileName';
-      final result = await _runner(
-        binaryPath,
-        const <String>['--list-devices'],
-        llamaServerLibraryEnvironment(nativeLibraryDir),
-      ).timeout(_timeout);
+      final result = await _runner(binaryPath, const <String>[
+        '--list-devices',
+      ], llamaServerLibraryEnvironment(nativeLibraryDir)).timeout(_timeout);
       final output = '${result.stdout}\n${result.stderr}';
+      _logger.debug(
+        'llama-server --list-devices (exit ${result.exitCode}):\n$output',
+        channel: LogChannel.engine,
+        inMemory: true,
+      );
       if (result.exitCode != 0) {
         _logger.warning(
           'llama-server --list-devices exited ${result.exitCode}',
