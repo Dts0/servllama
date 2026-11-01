@@ -148,12 +148,16 @@ void main() {
     'MCP header storage round-trips and validation rejects unsafe headers',
     () {
       const storedHeaders = {'Authorization': 'Bearer token', 'X-Key': 'value'};
-      final stored = McpCredentials(headers: storedHeaders);
-      expect(McpCredentials.fromStored(stored.encode()).headers, storedHeaders);
-      expect(
-        () => McpCredentials.fromStored('legacy-token'),
-        throwsFormatException,
+      final stored = McpServer(
+        id: 'fixture',
+        name: 'Fixture',
+        url: 'https://example.invalid/mcp',
+        headers: storedHeaders,
       );
+      expect(McpServer.fromJson(stored.toJson()).headers, storedHeaders);
+      final client = McpClient(stored);
+      expect(client.credentials.headers, storedHeaders);
+      client.dio.close(force: true);
       for (final headers in <Map<String, String>>[
         {'Content-Type': 'text/plain'},
         {'X-Key': 'one', 'x-key': 'two'},

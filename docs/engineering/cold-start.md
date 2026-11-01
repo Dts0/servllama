@@ -2,7 +2,7 @@
 
 ## Three boundaries
 
-1. `main` admits business data before `runApp`: legacy migration checks,
+1. `main` admits business data before `runApp`: one-time credential migration, legacy migration checks,
    message storage and interrupted Run/tool recovery. Pending migration and
    admission failures use the existing visible `BootstrapGate` with explicit
    retry. Migration still precedes construction of business providers.
@@ -42,12 +42,36 @@ from ARB. Existing assistant snapshots do not wait for that label, and the
 homepage remains ungated. The localized initial name is persisted as ordinary
 editable assistant data; language changes never rename existing assistants.
 
-Provider keys are read only on editor/request demand. Those reads share a
-single flight per secret reference. Verified saves populate the process-local
-cache, while rotated/deleted references invalidate old cache entries. Missing
-or unreadable storage is never cached as an empty secret. Existing editor
-readiness and stable API Key rendering remain intact; persistence is guaranteed
-by secure storage, not by prewarming or retaining the process.
+Provider keys and MCP headers now persist inside their existing SQLite config
+rows. Download tokens and the local HTTP service key persist with their existing
+Preferences. These are app-private files, not application-level encrypted stores;
+Android backup remains disabled. Log redaction and credential-free Run snapshots
+remain independent privacy boundaries.
+
+The shared provider/server snapshot contains its credentials. Editors initialize
+controllers synchronously from it, including known empty values for new entries;
+there is no separate secret-reference lookup, credential cache or editor
+credential-loading state. This avoids both empty-key first frames and the MCP
+buttons' unnecessary disabled-to-enabled 200 ms foreground animation. Real
+save/connect operations retain their existing busy states and normal animations.
+An omitted provider key edit preserves it; explicitly clearing the field saves
+an empty key. A repository-owned credential revision advances only when the key
+changes, revoking frozen requests even if a key is changed away and back. MCP
+header changes replace stale connections; unrelated edits still reuse them.
+
+`CredentialMigration` runs in existing database admission before business
+providers or MCP startup. It reads the old encrypted-Preferences namespace once,
+moves referenced provider/MCP credentials into their existing config rows and
+service/download values into Preferences, then cleans the old namespace and
+publishes `inlineCredentialsComplete`. Config rows commit together; failed
+Preferences writes, SQL commits and cleanup remain retryable without overwriting
+already migrated values. Missing referenced credentials or malformed headers
+fail admission rather than becoming empty settings. Retry uses `BootstrapGate`,
+not a new gate or idle task. Later launches only check the completion marker;
+ordinary business code never uses the secure-storage plugin. The dependency is
+temporarily retained solely so existing installs can migrate, and can be removed
+after the supported upgrade window. Downgrading to the old credential format is
+not supported.
 
 Drafts and assistant metadata may finish in either order. Saved drafts merge
 without overwriting new input; text typed before the owning assistant is known
@@ -138,7 +162,7 @@ Migration/manual retry must be measured separately.
 
 Regression coverage blocks business reads while checking homepage first paint,
 module-local error behavior, migration/retry visibility, coalesced early demand,
-durable credential reads, typed-draft preservation and early native ownership
+inline credential restoration/migration, typed-draft preservation and early native ownership
 restoration. SVG tests still capture actual RGBA pixels for every bundled mark
 in both palettes and compare with `SvgPicture.asset`, including demand/reentry.
 

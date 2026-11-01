@@ -1,18 +1,15 @@
 import 'dart:convert';
 import 'package:servllama/core/database/app_database.dart';
-import 'package:servllama/core/security/secret_store.dart';
+import 'package:servllama/core/security/log_redactor.dart';
 import 'package:servllama/core/storage/kv_storage.dart';
-import 'package:servllama/core/utils/new_id.dart';
 import 'package:servllama/features/assistants/models/assistant.dart';
 import 'package:servllama/features/assistants/models/avatar_data.dart';
 import 'package:servllama/features/assistants/models/provider_presets.dart';
 
 class AssistantRepository {
-  AssistantRepository(this.db, {SecretStore? secrets, KvStorage? preferences})
-    : secrets = secrets ?? SecretStore.instance,
-      preferences = preferences ?? KvStorage.instance;
+  AssistantRepository(this.db, {KvStorage? preferences})
+    : preferences = preferences ?? KvStorage.instance;
   final AppDatabase db;
-  final SecretStore secrets;
   final KvStorage preferences;
   Future<void> initializeProviders() async {
     await db.transaction(() async {
@@ -39,6 +36,9 @@ class AssistantRepository {
         .map((r) => AiConnection.fromJson(jsonDecode(r.read<String>('config'))))
         .toList();
     values.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+    for (final value in values) {
+      LogRedactor.remember(value.apiKey);
+    }
     return values;
   }
 
@@ -162,82 +162,58 @@ class AssistantRepository {
     );
   });
 
-  Future<AiConnection> saveConnection(
-    AiConnection c, {
-    String? newSecret,
-  }) async {
+  Future<AiConnection> saveConnection(AiConnection c, {String? key}) async {
     c.validate();
-    String? previousRef, nextRef;
-    late AiConnection saved;
-    try {
-      saved = await db.transaction(() async {
-        final current = await connections();
-        final previous = current.where((v) => v.id == c.id).firstOrNull;
-        if (previous != null && c.revision != previous.revision) {
-          throw StateError('Provider changed; reopen its settings');
-        }
-        previousRef = previous?.secretRef;
-        nextRef = previousRef;
-        if (newSecret != null && newSecret.isNotEmpty) {
-          nextRef = 'connection:${c.id}:${newId()}';
-          await secrets.write(nextRef!, newSecret);
-        }
-        final models = c.models.map((id) => id.trim()).toSet().toList();
-        final value = c.changed({
-          'secretRef': nextRef,
-          'revision': (previous?.revision ?? 0) + 1,
-          'sortOrder':
-              previous?.sortOrder ?? (current.firstOrNull?.sortOrder ?? 0) - 1,
-          'models': models,
-          'modelCapabilities': {
-            for (final id in c.models)
-              id.trim(): c.capabilitiesFor(id).toJson(),
-          },
-          'modelNames': {
-            for (final id in c.models)
-              if (c.modelNames[id]?.trim().isNotEmpty == true)
-                id.trim(): c.modelNames[id]!.trim(),
-          },
-        });
-        await db.execute(
-          'INSERT INTO ai_connections(id,name,revision,config) VALUES(?,?,?,?) '
-          'ON CONFLICT(id) DO UPDATE SET name=excluded.name,revision=excluded.revision,config=excluded.config',
-          [value.id, value.name, value.revision, jsonEncode(value.toJson())],
-        );
-        await _clearTargets(
-          (t) =>
-              t.isRemote &&
-              t.connectionId == value.id &&
-              !value.hasModel(t.modelId),
-        );
-        return value;
-      });
-    } catch (_) {
-      if (nextRef != null && nextRef != previousRef) {
-        await secrets.delete(nextRef!);
+    return db.transaction(() async {
+      final current = await connections();
+      final previous = current.where((v) => v.id == c.id).firstOrNull;
+      if (previous != null && c.revision != previous.revision) {
+        throw StateError('Provider changed; reopen its settings');
       }
-      rethrow;
-    }
-    if (previousRef != null && previousRef != nextRef) {
-      await secrets.delete(previousRef!);
-    }
-    return saved;
+      final apiKey = key ?? previous?.apiKey ?? c.apiKey;
+      LogRedactor.remember(apiKey);
+      final models = c.models.map((id) => id.trim()).toSet().toList();
+      final value = c.changed({
+        'apiKey': apiKey,
+        'credentialRevision':
+            (previous?.credentialRevision ?? 0) +
+            (apiKey != (previous?.apiKey ?? '') ? 1 : 0),
+        'revision': (previous?.revision ?? 0) + 1,
+        'sortOrder':
+            previous?.sortOrder ?? (current.firstOrNull?.sortOrder ?? 0) - 1,
+        'models': models,
+        'modelCapabilities': {
+          for (final id in c.models) id.trim(): c.capabilitiesFor(id).toJson(),
+        },
+        'modelNames': {
+          for (final id in c.models)
+            if (c.modelNames[id]?.trim().isNotEmpty == true)
+              id.trim(): c.modelNames[id]!.trim(),
+        },
+      });
+      await db.execute(
+        'INSERT INTO ai_connections(id,name,revision,config) VALUES(?,?,?,?) '
+        'ON CONFLICT(id) DO UPDATE SET name=excluded.name,revision=excluded.revision,config=excluded.config',
+        [value.id, value.name, value.revision, jsonEncode(value.toJson())],
+      );
+      await _clearTargets(
+        (t) =>
+            t.isRemote &&
+            t.connectionId == value.id &&
+            !value.hasModel(t.modelId),
+      );
+      return value;
+    });
   }
 
   Future<void> deleteConnection(String id) async {
     if (isPresetProvider(id)) {
       throw StateError('Preset providers cannot be deleted');
     }
-    final connection = (await connections())
-        .where((c) => c.id == id)
-        .firstOrNull;
     await db.transaction(() async {
       await _clearTargets((t) => t.isRemote && t.connectionId == id);
       await db.execute('DELETE FROM ai_connections WHERE id=?', [id]);
     });
-    if (connection?.secretRef != null) {
-      await secrets.delete(connection!.secretRef!);
-    }
   }
 
   Future<UserProfile> profile() async => UserProfile.fromJson(

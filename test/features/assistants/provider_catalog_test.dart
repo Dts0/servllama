@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:servllama/core/database/app_database.dart';
-import 'package:servllama/core/security/secret_store.dart';
 import 'package:servllama/core/models/model_asset.dart';
 import 'package:servllama/core/repositories/unified_model_repository.dart';
 import 'package:servllama/core/storage/kv_storage.dart';
@@ -12,29 +11,6 @@ import 'package:servllama/features/assistants/models/provider_presets.dart';
 import 'package:servllama/features/assistants/repositories/assistant_repository.dart';
 import 'package:servllama/features/assistants/providers/assistant_provider.dart';
 import 'package:servllama/features/chat/models/chat_run_config.dart';
-
-class _Secrets extends SecretStore {
-  final values = <String, String>{};
-  int reads = 0;
-  bool failReads = false;
-  Completer<String?>? pending;
-  @override
-  Future<String?> read(String key) async {
-    reads++;
-    if (failReads) throw StateError('fixture secure storage unavailable');
-    return pending?.future ?? values[key];
-  }
-
-  @override
-  Future<void> write(String key, String value) async {
-    values[key] = value;
-  }
-
-  @override
-  Future<void> delete(String key) async {
-    values.remove(key);
-  }
-}
 
 class _EmptyAssets extends UnifiedModelRepository {
   @override
@@ -56,7 +32,6 @@ class _TrackedAssets extends UnifiedModelRepository {
 void main() {
   late AppDatabase db;
   late AssistantRepository repository;
-  late _Secrets secrets;
   const custom = AiConnection(
     id: 'custom',
     name: 'Custom',
@@ -66,8 +41,7 @@ void main() {
   );
   setUp(() {
     db = AppDatabase.memory();
-    secrets = _Secrets();
-    repository = AssistantRepository(db, secrets: secrets);
+    repository = AssistantRepository(db);
   });
   tearDown(() => db.close());
 
@@ -93,45 +67,29 @@ void main() {
       await Future.wait([initial, saving]);
       expect(models.modes, [false]);
       expect(provider.connection(custom.id)!.models, ['kept']);
-      expect(
-        provider.cachedCredential(provider.connection(custom.id)!),
-        'fixture-key',
-      );
+      expect(provider.connection(custom.id)!.apiKey, 'fixture-key');
     },
   );
 
   test(
-    'credential demand coalesces and missing storage is never cached empty',
+    'settings restore includes the key without a separate credential read',
     () async {
-      final saved = await repository.saveConnection(
-        custom,
-        newSecret: 'fixture-key',
-      );
+      await repository.saveConnection(custom, key: 'fixture-key');
       final provider = AssistantProvider(
         repository: repository,
         models: _EmptyAssets(),
       );
       addTearDown(provider.dispose);
       await provider.ensureLoaded();
-      secrets.pending = Completer<String?>();
-      final first = provider.credential(saved);
-      expect(identical(first, provider.credential(saved)), isTrue);
-      secrets.pending!.complete(null);
-      await expectLater(first, throwsStateError);
-      expect(provider.cachedCredential(saved), isNull);
-      secrets.pending = null;
-      expect(await provider.credential(saved), 'fixture-key');
-      expect(secrets.reads, 2);
+      expect(provider.connection(custom.id)!.apiKey, 'fixture-key');
+      expect(provider.connection(custom.id)!.credentialRevision, 1);
     },
   );
 
   test(
-    'light startup restores targets without secure-storage or inventory reads',
+    'light startup restores keys and targets without inventory reads',
     () async {
-      final saved = await repository.saveConnection(
-        custom,
-        newSecret: 'fixture-key',
-      );
+      final saved = await repository.saveConnection(custom, key: 'fixture-key');
       await repository.saveAssistant(
         const Assistant(
           id: 'a',
@@ -147,8 +105,7 @@ void main() {
       addTearDown(provider.dispose);
       await provider.load(reconcileAssets: false);
       expect(models.modes, [false]);
-      expect(provider.cachedCredential(saved), isNull);
-      expect(secrets.reads, 0);
+      expect(provider.connection(saved.id)!.apiKey, 'fixture-key');
       expect(provider.active!.chatTarget!.modelId, 'kept');
       expect(provider.resolveTarget(provider.active!.chatTarget), isNotNull);
       models.pending = Completer<List<ModelAsset>>();
@@ -161,7 +118,7 @@ void main() {
       await provider.ensureAssetsReconciled();
       expect(models.modes, [false, true]);
       expect(provider.active!.chatTarget!.modelId, 'kept');
-      expect(await provider.credential(saved), 'fixture-key');
+      expect(provider.connection(saved.id)!.apiKey, 'fixture-key');
     },
   );
 
@@ -200,70 +157,46 @@ void main() {
   );
 
   test(
-    'credential failure preserves settings and stays retryable instead of caching an empty key',
+    'model-only edits preserve the stored key and its credential revision',
     () async {
-      final saved = await repository.saveConnection(
-        custom,
-        newSecret: 'fixture-key',
+      final saved = await repository.saveConnection(custom, key: 'fixture-key');
+      final edited = await repository.saveConnection(
+        saved.changed({
+          'models': ['kept', 'new'],
+        }),
       );
-      secrets.failReads = true;
-      final provider = AssistantProvider(
-        repository: repository,
-        models: _EmptyAssets(),
-      );
-      addTearDown(provider.dispose);
-      await provider.load();
-      expect(provider.loaded, isTrue);
-      expect(provider.connection(custom.id)!.secretRef, saved.secretRef);
-      expect(provider.cachedCredential(saved), isNull);
-      await expectLater(provider.credential(saved), throwsStateError);
-      secrets.failReads = false;
-      expect(await provider.credential(saved), 'fixture-key');
-      expect(provider.cachedCredential(saved), 'fixture-key');
+      expect(edited.apiKey, saved.apiKey);
+      expect(edited.credentialRevision, saved.credentialRevision);
     },
   );
 
   test(
-    'demand credential reads cache verified keys and survive process recreation',
+    'inline credentials survive settings reload and process recreation',
     () async {
-      var saved = await repository.saveConnection(
-        custom,
-        newSecret: 'fixture-first',
-      );
+      var saved = await repository.saveConnection(custom, key: 'fixture-first');
       final provider = AssistantProvider(
         repository: repository,
         models: _EmptyAssets(),
       );
       await provider.load();
       expect(provider.loaded, isTrue);
-      expect(provider.cachedCredential(saved), isNull);
-      expect(await provider.credential(saved), 'fixture-first');
-      final reads = secrets.reads;
-      expect(await provider.credential(saved), 'fixture-first');
-      expect(secrets.reads, reads);
+      expect(provider.connection(saved.id)!.apiKey, 'fixture-first');
       await provider.saveConnection(saved, key: 'fixture-second');
       saved = provider.connection(custom.id)!;
-      expect(provider.cachedCredential(saved), 'fixture-second');
+      expect(saved.apiKey, 'fixture-second');
       provider.dispose();
       final restored = AssistantProvider(
-        repository: AssistantRepository(
-          db,
-          secrets: secrets,
-          preferences: KvStorage(),
-        ),
+        repository: AssistantRepository(db, preferences: KvStorage()),
         models: _EmptyAssets(),
       );
       addTearDown(restored.dispose);
       await restored.load();
-      expect(
-        await restored.credential(restored.connection(custom.id)!),
-        'fixture-second',
-      );
+      expect(restored.connection(custom.id)!.apiKey, 'fixture-second');
       expect(
         jsonEncode(
           (await repository.connections()).map((c) => c.toJson()).toList(),
         ),
-        isNot(contains('fixture-second')),
+        contains('fixture-second'),
       );
     },
   );
@@ -373,7 +306,7 @@ void main() {
       expect(initial.map((c) => c.id), providerPresets.map((c) => c.id));
       expect(
         initial.every(
-          (c) => !c.enabled && c.models.isEmpty && c.secretRef == null,
+          (c) => !c.enabled && c.models.isEmpty && c.apiKey.isEmpty,
         ),
         isTrue,
       );
@@ -397,7 +330,6 @@ void main() {
         (await repository.connections()).map((c) => c.id),
         initial.map((c) => c.id),
       );
-      expect(secrets.values, isEmpty);
       await repository.saveConnection(custom);
       await repository.deleteConnection(custom.id);
       expect(
@@ -435,7 +367,7 @@ void main() {
       expect((await repository.connections()).map((c) => c.id), expected);
       first = await repository.saveConnection(first.changed({'enabled': true}));
 
-      final reopened = AssistantRepository(db, secrets: secrets);
+      final reopened = AssistantRepository(db);
       await reopened.initializeProviders();
       final loaded = await reopened.connections();
       expect(loaded.map((c) => c.id), expected);
@@ -576,7 +508,7 @@ void main() {
     () async {
       final original = await repository.saveConnection(
         custom,
-        newSecret: 'fixture-old',
+        key: 'fixture-old',
       );
       final updated = await repository.saveConnection(
         original.changed({
@@ -584,11 +516,10 @@ void main() {
           'enabled': false,
         }),
       );
-      final before = Map.of(secrets.values);
       await expectLater(
         repository.saveConnection(
           original.changed({'name': 'Stale'}),
-          newSecret: 'fixture-new',
+          key: 'fixture-new',
         ),
         throwsStateError,
       );
@@ -596,7 +527,6 @@ void main() {
         (await repository.connections()).single.toJson(),
         updated.toJson(),
       );
-      expect(secrets.values, before);
       final outcomes = await Future.wait([
         repository
             .saveConnection(updated.changed({'name': 'First'}))
@@ -610,21 +540,19 @@ void main() {
   );
 
   test(
-    'failed commit preserves the old credential and empty input keeps it',
+    'failed commit preserves the key; omitted input keeps it and explicit empty input clears it',
     () async {
       final original = await repository.saveConnection(
         custom,
-        newSecret: 'fixture-old',
+        key: 'fixture-old',
       );
-      final before = Map.of(secrets.values);
       await db.execute(
         "CREATE TRIGGER reject_provider BEFORE INSERT ON ai_connections BEGIN SELECT RAISE(ABORT,'fixture'); END",
       );
       await expectLater(
-        repository.saveConnection(original, newSecret: 'fixture-new'),
+        repository.saveConnection(original, key: 'fixture-new'),
         throwsA(anything),
       );
-      expect(secrets.values, before);
       expect(
         (await repository.connections()).single.toJson(),
         original.toJson(),
@@ -632,17 +560,52 @@ void main() {
       await db.execute('DROP TRIGGER reject_provider');
       final preserved = await repository.saveConnection(
         original.changed({'name': 'Updated'}),
-        newSecret: '',
       );
-      expect(preserved.secretRef, original.secretRef);
-      expect(secrets.values.values.single, 'fixture-old');
-
+      expect(preserved.apiKey, original.apiKey);
+      expect(preserved.credentialRevision, original.credentialRevision);
+      final cleared = await repository.saveConnection(preserved, key: '');
+      expect(cleared.apiKey, isEmpty);
+      expect(cleared.credentialRevision, original.credentialRevision + 1);
       final replaced = await repository.saveConnection(
-        preserved,
-        newSecret: 'fixture-new',
+        cleared,
+        key: 'fixture-new',
       );
-      expect(replaced.secretRef, isNot(preserved.secretRef));
-      expect(secrets.values.values.single, 'fixture-new');
+      expect(replaced.apiKey, 'fixture-new');
+      expect(replaced.credentialRevision, cleared.credentialRevision + 1);
+    },
+  );
+
+  test(
+    'rotating away and back still revokes a frozen request and snapshots exclude keys',
+    () async {
+      const assistant = Assistant(id: 'a', name: 'A');
+      final original = await repository.saveConnection(
+        custom,
+        key: 'fixture-old',
+      );
+      final run = ChatRunConfig(
+        assistant: assistant,
+        connection: original,
+        key: original.apiKey,
+        modelId: 'kept',
+        isLocal: false,
+      );
+      final unchanged = await repository.saveConnection(
+        original,
+        key: original.apiKey,
+      );
+      expect(run.authorizedBy(assistant, unchanged), isTrue);
+      final rotated = await repository.saveConnection(
+        unchanged,
+        key: 'fixture-new',
+      );
+      final restored = await repository.saveConnection(
+        rotated,
+        key: 'fixture-old',
+      );
+      expect(run.authorizedBy(assistant, restored), isFalse);
+      expect(jsonEncode(run.snapshot()), isNot(contains('fixture-old')));
+      expect(run.snapshot()['connection'], isNot(contains('apiKey')));
     },
   );
 
@@ -701,7 +664,7 @@ void main() {
       });
       final saved = await repository.saveConnection(
         custom.changed({'baseUrl': 'http://127.0.0.1:${server.port}/v1'}),
-        newSecret: 'fixture-stored-key',
+        key: 'fixture-stored-key',
       );
       final provider = AssistantProvider(repository: repository);
       addTearDown(provider.dispose);
@@ -712,7 +675,7 @@ void main() {
         'Bearer fixture-typed-key',
       ]);
       expect((await repository.connections()).single.toJson(), saved.toJson());
-      expect(secrets.values.values.single, 'fixture-stored-key');
+      expect(saved.apiKey, 'fixture-stored-key');
     },
   );
 }

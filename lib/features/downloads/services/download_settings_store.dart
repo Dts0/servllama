@@ -1,5 +1,4 @@
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:servllama/core/security/secret_store.dart';
+import 'package:servllama/core/security/log_redactor.dart';
 import 'package:servllama/core/storage/download_prefs_keys.dart';
 import 'package:servllama/core/storage/kv_storage.dart';
 import 'package:servllama/features/downloads/models/model_hub.dart';
@@ -73,34 +72,16 @@ class DownloadSettings {
 /// Reads and writes download preferences. Tokens are credentials: they are
 /// never logged and never included in exported log files.
 class DownloadSettingsStore {
-  DownloadSettingsStore({
-    KvStorage? kvStorage,
-    FlutterSecureStorage? secureStorage,
-    SecretStore? secrets,
-  }) : _kvStorage = kvStorage ?? KvStorage.instance,
-       _secrets =
-           secrets ??
-           (secureStorage == null
-               ? SecretStore.instance
-               : SecretStore(storage: secureStorage));
+  DownloadSettingsStore({KvStorage? kvStorage})
+    : _kvStorage = kvStorage ?? KvStorage.instance;
 
   final KvStorage _kvStorage;
-  final SecretStore _secrets;
-
-  static const String _hfTokenKey = 'servllama.download.hf_token';
-  static const String _modelScopeTokenKey = 'servllama.download.ms_token';
 
   Future<DownloadSettings> load() async {
     return DownloadSettings(
       huggingFaceRoute: await loadHuggingFaceRoute(),
-      huggingFaceToken: await _loadCredential(
-        _hfTokenKey,
-        DownloadPrefsKeys.huggingFaceToken,
-      ),
-      modelScopeToken: await _loadCredential(
-        _modelScopeTokenKey,
-        DownloadPrefsKeys.modelScopeToken,
-      ),
+      huggingFaceToken: await _loadToken(DownloadPrefsKeys.huggingFaceToken),
+      modelScopeToken: await _loadToken(DownloadPrefsKeys.modelScopeToken),
       wifiOnly: await _kvStorage.getBool(DownloadPrefsKeys.wifiOnly) ?? true,
       maxConcurrentTasks:
           await _kvStorage.getInt(DownloadPrefsKeys.maxConcurrentTasks) ??
@@ -120,13 +101,10 @@ class DownloadSettingsStore {
       _kvStorage.setString(DownloadPrefsKeys.huggingFaceRoute, route.name);
 
   Future<void> saveHuggingFaceToken(String token) =>
-      _saveCredential(_hfTokenKey, DownloadPrefsKeys.huggingFaceToken, token);
+      _saveToken(DownloadPrefsKeys.huggingFaceToken, token);
 
-  Future<void> saveModelScopeToken(String token) => _saveCredential(
-    _modelScopeTokenKey,
-    DownloadPrefsKeys.modelScopeToken,
-    token,
-  );
+  Future<void> saveModelScopeToken(String token) =>
+      _saveToken(DownloadPrefsKeys.modelScopeToken, token);
 
   Future<void> saveWifiOnly(bool value) =>
       _kvStorage.setBool(DownloadPrefsKeys.wifiOnly, value);
@@ -137,29 +115,14 @@ class DownloadSettingsStore {
   Future<void> savePreferredSource(ModelHubSource source) => _kvStorage
       .setString(DownloadPrefsKeys.preferredSource, source.storageValue);
 
-  Future<String> _loadCredential(String key, String legacyKey) async {
-    final value = await _secrets.read(key);
-    if (value != null) return value;
-
-    final legacy = await _kvStorage.getString(legacyKey) ?? '';
-    if (legacy.isEmpty) {
-      return '';
-    }
-    await _secrets.write(key, legacy);
-    await _kvStorage.remove(legacyKey);
-    return legacy;
+  Future<String> _loadToken(String key) async {
+    final value = await _kvStorage.getString(key) ?? '';
+    LogRedactor.remember(value);
+    return value;
   }
 
-  Future<void> _saveCredential(
-    String key,
-    String legacyKey,
-    String value,
-  ) async {
-    if (value.isEmpty) {
-      await _secrets.delete(key);
-    } else {
-      await _secrets.write(key, value);
-    }
-    await _kvStorage.remove(legacyKey);
+  Future<void> _saveToken(String key, String value) async {
+    LogRedactor.remember(value);
+    await _kvStorage.setString(key, value);
   }
 }

@@ -17,9 +17,9 @@ class McpClient {
     this.runId,
     this.onToolsChanged,
     this.onConnectionLost,
-    Map<String, String> headers = const {},
+    Map<String, String>? headers,
   }) : _logger = logger ?? AppLogger.instance,
-       credentials = McpCredentials(headers: headers),
+       credentials = McpCredentials(headers: headers ?? server.headers),
        dio =
            dio ??
            Dio(

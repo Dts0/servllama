@@ -22,7 +22,7 @@ This guide describes the project map and durable development boundaries. Version
 | Application | Dart, Flutter, Material 3; Android arm64 |
 | State and networking | Provider, Dio |
 | Business storage | Drift/SQLite; Hive only for read-only legacy import |
-| Settings and credentials | SharedPreferences, flutter_secure_storage |
+| Settings and credentials | SharedPreferences and business SQLite; flutter_secure_storage only reads/cleans pre-upgrade credentials during startup migration |
 | Local LLM | llama.cpp via a bundled `llama-server` child process; MNN via the `mnn_engine` Flutter plugin |
 | Offline speech | sherpa-onnx, CrispASR; recording/playback plugins |
 | Platform integration | Kotlin bridges, native libraries and Android foreground services |
@@ -62,7 +62,7 @@ Pages present UI and route interactions; providers/controllers coordinate flows;
 - Data integrity: keep one business database and reuse existing repositories. Migration precedes business initialization; Hive remains read-only. Commit related message/revision/Run changes together, preserve referenced history, and clean owned files only after record transactions commit.
 - Authority: freeze Run/job inputs and revalidate current model/tool permissions before side effects. Capabilities belong to individual models. Interrupted requests and unknown tool outcomes must not replay automatically; profiles/avatars are display-only.
 - Product scope: Skills are static resources and MCP uses remote HTTP/SSE. Do not incidentally add shell execution, stdio subprocesses or platform automation. Speech is internal, not an HTTP API or cloud-forwarding service; preserve native watermark/provenance behavior.
-- Privacy and consistency: reuse `AppLogger`/`FileLogSink` with bounded retention. Log lifecycle metadata, not prompts, responses, tool payloads, audio, paths or credentials. Store credentials securely, preserve shared UI/localization patterns, and avoid unrelated refactors or unsolicited dependency changes.
+- Privacy and consistency: reuse `AppLogger`/`FileLogSink` with bounded retention. Log lifecycle metadata, not prompts, responses, tool payloads, audio, paths or credentials. Credentials persist with their owning configuration in app-private SQLite/Preferences without application-level encryption; never copy them into Run snapshots or diagnostic exports. Preserve shared UI/localization patterns, and avoid unrelated refactors or unsolicited dependency changes.
 
 ## Development and Verification
 

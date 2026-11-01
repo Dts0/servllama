@@ -139,7 +139,8 @@ class AiConnection {
     required this.name,
     required this.protocol,
     required this.baseUrl,
-    this.secretRef,
+    this.apiKey = '',
+    this.credentialRevision = 0,
     this.apiPath,
     this.models = const [],
     this.revision = 1,
@@ -149,7 +150,8 @@ class AiConnection {
     this.sortOrder = 0,
   });
   final String id, name, baseUrl;
-  final String? secretRef;
+  final String apiKey;
+  final int credentialRevision;
   final String? apiPath;
   final AiProtocol protocol;
   final List<String> models;
@@ -174,7 +176,8 @@ class AiConnection {
     'protocol': protocol.name,
     'baseUrl': baseUrl,
     'apiPath': apiPath,
-    'secretRef': secretRef,
+    'apiKey': apiKey,
+    'credentialRevision': credentialRevision,
     'models': models,
     'revision': revision,
     'modelCapabilities': {
@@ -197,7 +200,8 @@ class AiConnection {
       protocol: AiProtocol.values.byName(j['protocol']),
       baseUrl: j['baseUrl'],
       apiPath: j['apiPath'],
-      secretRef: j['secretRef'],
+      apiKey: j['apiKey'] ?? '',
+      credentialRevision: j['credentialRevision'] ?? 0,
       models: models,
       revision: j['revision'] ?? 1,
       modelCapabilities: Map.unmodifiable({

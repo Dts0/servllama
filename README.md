@@ -96,7 +96,7 @@ Tool use requires a model that supports tool calling. Local shell execution and 
 
 ### Everyday Use
 
-- **Local data:** conversations, drafts, configuration, and speech results are stored on your device; API credentials use secure storage.
+- **Local data:** conversations, drafts, configuration, and speech results are stored on your device.
 - **Appearance and navigation:** light and dark themes, Chinese and English interfaces, and a sidebar for assistants, history, models, services, and settings.
 - **Diagnostics:** view, filter, copy, and export application and runtime logs when troubleshooting.
 

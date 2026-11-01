@@ -3323,12 +3323,6 @@ abstract class AppLocalizations {
   /// **'API key'**
   String get v2ApiKey;
 
-  /// No description provided for @v2CredentialLoadFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Could not read the saved credential. Retry before saving.'**
-  String get v2CredentialLoadFailed;
-
   /// No description provided for @v2ShowApiKey.
   ///
   /// In en, this message translates to:

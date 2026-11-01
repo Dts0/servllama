@@ -140,4 +140,36 @@ void main() {
     );
     expect(fixture.initializes, 1);
   });
+
+  test(
+    'unchanged headers reuse a session while changed headers replace it',
+    () async {
+      final fixture = await McpToolFixture.start({
+        'content': [
+          {'type': 'text', 'text': 'ok'},
+        ],
+      });
+      addTearDown(fixture.close);
+      final original = McpServer.fromJson({
+        ...fixture.config.toJson(),
+        'headers': {'X-Key': 'first'},
+      });
+      final first = await service.mcp.ensureConnected(original);
+      final renamed = McpServer.fromJson({
+        ...original.toJson(),
+        'name': 'Renamed',
+        'headers': Map.of(original.headers),
+      });
+      final reused = await service.mcp.ensureConnected(renamed);
+      expect(reused.client, same(first.client));
+      expect(fixture.initializes, 1);
+      final changed = McpServer.fromJson({
+        ...renamed.toJson(),
+        'headers': {'X-Key': 'second'},
+      });
+      final replacement = await service.mcp.ensureConnected(changed);
+      expect(replacement.client, isNot(same(first.client)));
+      expect(fixture.initializes, 2);
+    },
+  );
 }

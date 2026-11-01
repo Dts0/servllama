@@ -25,7 +25,7 @@ const _cloud = AiConnection(
   protocol: AiProtocol.openai,
   baseUrl: 'https://example.com/v1',
   models: ['kept'],
-  secretRef: 'stored-ref',
+  apiKey: 'stored-secret',
 );
 const _local = ModelAsset(
   id: 'gguf',
@@ -44,9 +44,6 @@ class _Settings extends AssistantProvider {
   bool failDiscovery = false, blockDiscovery = false;
   String? savedKey;
   CancelToken? discoveryToken;
-  String? hydratedKey;
-  Completer<String>? pendingCredential;
-  int credentialReads = 0;
   _Settings() {
     loaded = true;
     connections = [
@@ -113,17 +110,6 @@ class _Settings extends AssistantProvider {
     if (blockDiscovery) throw await cancelToken!.whenCancel;
     if (failDiscovery) throw StateError('Fixture discovery failure');
     return discovered;
-  }
-
-  @override
-  String? cachedCredential(AiConnection c) =>
-      c.secretRef == null ? '' : hydratedKey;
-
-  @override
-  Future<String> credential(AiConnection c) async {
-    credentialReads++;
-    return pendingCredential?.future ??
-        (c.secretRef == null ? '' : 'stored-secret');
   }
 }
 
@@ -320,7 +306,8 @@ void main() {
   testWidgets('a restored credential is present on the first editor frame', (
     tester,
   ) async {
-    settings.hydratedKey = 'stored-secret';
+    await tester.binding.setSurfaceSize(const Size(420, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(app(const ConnectionEditor(connection: _cloud)));
     final field = tester.widget<TextField>(
       find.byKey(const Key('provider_key')),
@@ -331,47 +318,51 @@ void main() {
       field.decoration!.floatingLabelBehavior,
       FloatingLabelBehavior.always,
     );
-    expect(settings.credentialReads, 0);
+    final save = find.byKey(const Key('provider_save_button'));
+    expect(tester.widget<FilledButton>(save).onPressed, isNotNull);
+    final label = find.descendant(of: save, matching: find.byType(Text)).first;
+    expect(
+      DefaultTextStyle.of(tester.element(label)).style.color,
+      AppTheme.light().colorScheme.onPrimary,
+    );
     await tester.pump(const Duration(milliseconds: 16));
     expect(field.controller!.text, 'stored-secret');
   });
 
-  testWidgets('failed credential recovery cannot silently save an empty key', (
+  testWidgets(
+    'a provider without a key has an immediately editable empty field',
+    (tester) async {
+      final empty = _cloud.changed({'apiKey': ''});
+      await tester.pumpWidget(app(ConnectionEditor(connection: empty)));
+      final field = find.byKey(const Key('provider_key'));
+      expect(tester.widget<TextField>(field).enabled, isNot(false));
+      expect(tester.widget<TextField>(field).controller!.text, isEmpty);
+      await revealConfigField(
+        tester,
+        find.byKey(const Key('provider_save_button')),
+      );
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('provider_save_button')))
+            .onPressed,
+        isNotNull,
+      );
+    },
+  );
+
+  testWidgets('clearing a stored key is an explicit saved edit', (
     tester,
   ) async {
-    settings.pendingCredential = Completer<String>();
-    await tester.pumpWidget(app(const ConnectionEditor(connection: _cloud)));
-    final field = find.byKey(const Key('provider_key'));
-    expect(tester.widget<TextField>(field).enabled, isFalse);
-    await revealConfigField(
-      tester,
-      find.byKey(const Key('provider_save_button')),
-    );
-    expect(
-      tester
-          .widget<FilledButton>(find.byKey(const Key('provider_save_button')))
-          .onPressed,
-      isNull,
-    );
-    settings.pendingCredential!.completeError(
-      StateError('fixture storage unavailable'),
-    );
+    await tester.pumpWidget(app(editorLauncher()));
+    await openEditor(tester);
+    final key = find.byKey(const Key('provider_key'));
+    await tester.ensureVisible(key);
+    await tester.enterText(key, '');
+    final save = find.byKey(const Key('provider_save_button'));
+    await revealConfigField(tester, save);
+    await tester.tap(save);
     await tester.pumpAndSettle();
-    expect(tester.widget<TextField>(field).decoration!.errorText, isNotNull);
-    expect(
-      tester
-          .widget<FilledButton>(find.byKey(const Key('provider_save_button')))
-          .onPressed,
-      isNull,
-    );
-    expect(settings.savedKey, isNull);
-    settings.pendingCredential = Completer<String>()..complete('stored-secret');
-    await tester.ensureVisible(find.text('Retry'));
-    await tester.tap(find.text('Retry'));
-    await tester.pumpAndSettle();
-    expect(tester.widget<TextField>(field).enabled, isTrue);
-    expect(tester.widget<TextField>(field).controller!.text, 'stored-secret');
-    expect(tester.widget<TextField>(field).decoration!.errorText, isNull);
+    expect(settings.savedKey, '');
   });
 
   testWidgets(

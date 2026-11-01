@@ -421,12 +421,7 @@ class ChatProvider extends ChangeNotifier {
     final modelId = remote
         ? target.modelId!
         : (runtime.activeModelName ?? targetAsset!.runtimeId);
-    final key = remote
-        ? await assistants.credential(connection)
-        : runtime.apiKey;
-    if (connection.secretRef != null && key.isEmpty) {
-      throw StateError('Credential unavailable; enter it again');
-    }
+    final key = remote ? connection.apiKey : runtime.apiKey;
     return ChatRunConfig(
       assistant: copy,
       connection: connection,

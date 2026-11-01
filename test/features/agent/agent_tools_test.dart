@@ -4,7 +4,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:servllama/core/database/app_database.dart';
 import 'package:servllama/core/logging/app_logger.dart';
-import 'package:servllama/core/security/secret_store.dart';
 import 'package:servllama/features/agent/models/agent_records.dart';
 import 'package:servllama/features/agent/repositories/agent_repository.dart';
 import 'package:servllama/features/agent/services/agent_tool_service.dart';
@@ -277,11 +276,11 @@ void main() {
     },
   );
   test(
-    'MCP custom headers stay in secure storage and can be replaced',
+    'MCP custom headers persist with server config and can be replaced or cleared',
     () async {
       const draft = McpServer(
         id: '12345678-0000-0000-0000-000000000000',
-        name: 'secure headers',
+        name: 'headers',
         url: 'https://example.com/mcp',
       );
       const firstHeaders = {
@@ -290,26 +289,32 @@ void main() {
       };
       await service.saveMcp(draft, headers: firstHeaders);
       var saved = (await service.repository.servers()).single;
-      var credentials = await service.credentialsFor(saved);
-      expect(credentials.headers, firstHeaders);
+      expect(saved.headers, firstHeaders);
       final config = (await db.query(
         'SELECT config FROM mcp_servers',
       )).single.read<String>('config');
-      expect(config, isNot(contains('header-token')));
-      expect(config, isNot(contains('header-fixture')));
-      final firstRef = saved.secretRef!;
+      expect(config, contains('header-token'));
+      expect(config, isNot(contains('secretRef')));
       await service.saveMcp(saved, headers: firstHeaders);
       saved = (await service.repository.servers()).single;
-      expect(saved.secretRef, firstRef);
+      expect(saved.headers, firstHeaders);
+      await db.execute(
+        "CREATE TRIGGER reject_mcp BEFORE INSERT ON mcp_servers BEGIN SELECT RAISE(ABORT,'fixture'); END",
+      );
+      await expectLater(
+        service.saveMcp(saved, headers: {'X-API-Key': 'failed'}),
+        throwsA(anything),
+      );
+      expect((await service.repository.servers()).single.headers, firstHeaders);
+      await db.execute('DROP TRIGGER reject_mcp');
       await service.saveMcp(saved, headers: {'X-API-Key': 'rotated'});
       saved = (await service.repository.servers()).single;
-      credentials = await service.credentialsFor(saved);
-      expect(credentials.headers, {'X-API-Key': 'rotated'});
-      expect(await SecretStore.instance.read(firstRef), isNull);
+      expect(saved.headers, {'X-API-Key': 'rotated'});
       await service.saveMcp(saved, headers: const {});
-      expect((await service.repository.servers()).single.secretRef, isNull);
+      expect((await service.repository.servers()).single.headers, isEmpty);
     },
   );
+
   test(
     'deleting a selected skill clears bindings and invalidates pending approval',
     () async {

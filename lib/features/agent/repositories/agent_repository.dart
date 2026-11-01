@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:servllama/core/database/app_database.dart';
+import 'package:servllama/core/security/log_redactor.dart';
 import 'package:servllama/features/agent/models/agent_records.dart';
 import 'package:servllama/features/assistants/models/assistant.dart';
 
@@ -55,10 +56,21 @@ class AgentRepository {
     'ON CONFLICT(id) DO UPDATE SET name=excluded.name,hash=excluded.hash,config=excluded.config',
     [s.id, s.name, s.hash, jsonEncode(s.toJson())],
   );
-  Future<List<McpServer>> servers() async =>
-      (await db.query('SELECT config FROM mcp_servers ORDER BY name'))
-          .map((r) => McpServer.fromJson(jsonDecode(r.read<String>('config'))))
-          .toList();
+  Future<List<McpServer>> servers() async {
+    final servers =
+        (await db.query('SELECT config FROM mcp_servers ORDER BY name'))
+            .map(
+              (r) => McpServer.fromJson(jsonDecode(r.read<String>('config'))),
+            )
+            .toList();
+    for (final server in servers) {
+      for (final value in server.headers.values) {
+        LogRedactor.remember(value);
+      }
+    }
+    return servers;
+  }
+
   Future<void> saveServer(McpServer s) => db.execute(
     'INSERT INTO mcp_servers(id,name,revision,config) VALUES(?,?,?,?) '
     'ON CONFLICT(id) DO UPDATE SET name=excluded.name,revision=excluded.revision,config=excluded.config',

@@ -1,5 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:servllama/core/security/secret_store.dart';
+import 'package:servllama/core/security/log_redactor.dart';
 import 'package:servllama/core/storage/server_prefs_keys.dart';
 
 class KvStorage {
@@ -13,10 +13,11 @@ class KvStorage {
 
   Future<String?> getString(String key) async {
     final prefs = await _prefs();
-    if (key == ServerPrefsKeys.apiKey) {
-      return await SecretStore.instance.read(key) ?? prefs.getString(key);
+    final value = prefs.getString(key);
+    if (key == ServerPrefsKeys.apiKey && value != null) {
+      LogRedactor.remember(value);
     }
-    return prefs.getString(key);
+    return value;
   }
 
   Future<int?> getInt(String key) async {
@@ -45,9 +46,7 @@ class KvStorage {
 
   Future<void> setString(String key, String value) async {
     if (key == ServerPrefsKeys.apiKey) {
-      await SecretStore.instance.write(key, value);
-      await _write(key, (prefs) => prefs.remove(key));
-      return;
+      LogRedactor.remember(value);
     }
     await _write(key, (prefs) => prefs.setString(key, value));
   }
