@@ -4,10 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       llama_cpp_tag:
-        description: llama.cpp tag to build. The Hexagon patch matches v0.4.1.
+        description: llama.cpp tag to build.
         required: true
         default: v0.4.1
         type: string
+      hexagon_patch:
+        description: Hexagon patch (skip unsupported devices; matches v0.4.1).
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -91,23 +96,32 @@ jobs:
           docker system prune -af || true
           df -h /
 
-      - name: Apply Hexagon patch and ServLlama preset
+      - name: Apply Hexagon patch
+        if: ${{ inputs.hexagon_patch }}
         shell: bash
+        env:
+          LLAMA_CPP_TAG: ${{ inputs.llama_cpp_tag }}
         run: |
           set -euo pipefail
 
           # git -C changes directory before opening the patch, so a workspace-relative path would miss.
           patch="${GITHUB_WORKSPACE}/patches/llama.cpp/0001-hexagon-skip-unsupported-devices.patch"
-          preset="${GITHUB_WORKSPACE}/patches/llama.cpp/CMakeUserPresets.servllama.json"
           test -f "${patch}"
-          test -f "${preset}"
 
           if ! git -C llama.cpp apply --check "${patch}"; then
-            echo "The Hexagon patch did not apply to ${{ inputs.llama_cpp_tag }}." >&2
+            echo "The Hexagon patch did not apply to ${LLAMA_CPP_TAG}." >&2
             echo "It is written for llama.cpp v0.4.1." >&2
             exit 1
           fi
           git -C llama.cpp apply "${patch}"
+
+      - name: Install ServLlama CMake preset
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          preset="${GITHUB_WORKSPACE}/patches/llama.cpp/CMakeUserPresets.servllama.json"
+          test -f "${preset}"
           cp "${preset}" llama.cpp/CMakeUserPresets.json
           test -s llama.cpp/CMakeUserPresets.json
 
@@ -143,6 +157,7 @@ jobs:
         env:
           LLAMA_CPP_TAG: ${{ inputs.llama_cpp_tag }}
           LLAMA_CPP_COMMIT: ${{ steps.source.outputs.commit }}
+          HEXAGON_PATCH: ${{ inputs.hexagon_patch }}
         run: |
           set -euo pipefail
 
@@ -172,9 +187,16 @@ jobs:
           mkdir -p "${manifest_dir}"
           chmod 755 "${jni_dir}/libllama-server.so"
 
+          manifest_version="${LLAMA_CPP_TAG}"
+          patch_json=null
+          if [[ "${HEXAGON_PATCH}" == "true" ]]; then
+            manifest_version+="+hexagon-skip-unsupported"
+            patch_json='"0001-hexagon-skip-unsupported-devices"'
+          fi
+
           cat > "${manifest_dir}/llama_server_manifest.json" <<EOF
           {
-            "version": "${LLAMA_CPP_TAG}+hexagon-skip-unsupported"
+            "version": "${manifest_version}"
           }
           EOF
 
@@ -190,7 +212,7 @@ jobs:
             "ndkVersion": "${ndk_version}",
             "hexagonSdkRoot": "${HEXAGON_SDK_ROOT}",
             "hexagonToolsRoot": "${HEXAGON_TOOLS_ROOT}",
-            "patch": "0001-hexagon-skip-unsupported-devices",
+            "patch": ${patch_json},
             "backends": ["cpu", "opencl", "hexagon"],
             "buildType": "Release"
           }
@@ -218,6 +240,7 @@ jobs:
             echo "- ABI: \`${ANDROID_ABI}\`"
             echo "- Minimum Android API: \`${android_api}\`"
             echo "- Toolchain: \`${SNAPDRAGON_IMAGE}\`"
+            echo "- Hexagon patch: \`${HEXAGON_PATCH}\`"
             echo "- Archive: \`${bundle_name}.tar.gz\`"
             echo
             echo "The archive contains directories that can be copied directly over the ServLlama repository."
