@@ -1,3 +1,4 @@
+import 'package:servllama/core/models/inference_engine.dart';
 import 'package:servllama/shared/widgets/ai_identity_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:servllama/app/app_palette.dart';
@@ -193,7 +194,9 @@ class DownloadTaskCard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  if (status.isResumable && onSwitchSource != null)
+                  if (status.isResumable &&
+                      onSwitchSource != null &&
+                      task.engine != InferenceEngine.miniCpm)
                     TextButton(
                       onPressed: onSwitchSource,
                       child: Text(l10n.downloadSwitchSource),

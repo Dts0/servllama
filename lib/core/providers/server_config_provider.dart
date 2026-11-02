@@ -73,6 +73,10 @@ class ServerConfigProvider extends ChangeNotifier {
   bool get loadingLlamaCppBackends => _loadingLlamaCppBackends;
   bool get llamaCppBackendsResolved => _llamaCppBackendsResolved;
   String? get llamaCppBackendError => _llamaCppBackendError;
+  int get miniCpmMicroBatch => _settings.miniCpmMicroBatch;
+  int get miniCpmSlotBank => _settings.miniCpmSlotBank;
+  int get miniCpmCacheWindow => _settings.miniCpmCacheWindow;
+  bool get miniCpmReasoning => _settings.miniCpmReasoning;
   MnnBackend get mnnBackend => _settings.mnnBackend;
   List<MnnBackendCapability> get mnnCapabilities => _mnnCapabilities;
   MnnBackend? get activeMnnBackend => _activeMnnBackend;
@@ -290,6 +294,21 @@ class ServerConfigProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> updateMiniCpmMicroBatch(int value) =>
+      value > 0 && value <= 2147483647
+      ? _apply(_settings.copyWith(miniCpmMicroBatch: value))
+      : Future.value();
+  Future<void> updateMiniCpmSlotBank(int value) =>
+      value > 0 && value <= 2147483647
+      ? _apply(_settings.copyWith(miniCpmSlotBank: value))
+      : Future.value();
+  Future<void> updateMiniCpmCacheWindow(int value) =>
+      value >= 0 && value <= 2147483647
+      ? _apply(_settings.copyWith(miniCpmCacheWindow: value))
+      : Future.value();
+  Future<void> updateMiniCpmReasoning(bool value) =>
+      _apply(_settings.copyWith(miniCpmReasoning: value));
+
   Future<void> updateMnnUseMmap(bool value) {
     return _apply(_settings.copyWith(mnnUseMmap: value));
   }
@@ -451,6 +470,10 @@ class ServerConfigProvider extends ChangeNotifier {
         a.logLevel == b.logLevel &&
         a.llamaCppBackend == b.llamaCppBackend &&
         a.llamaCppGpuLayers == b.llamaCppGpuLayers &&
+        a.miniCpmMicroBatch == b.miniCpmMicroBatch &&
+        a.miniCpmSlotBank == b.miniCpmSlotBank &&
+        a.miniCpmCacheWindow == b.miniCpmCacheWindow &&
+        a.miniCpmReasoning == b.miniCpmReasoning &&
         a.mnnBackend == b.mnnBackend &&
         a.mnnUseMmap == b.mnnUseMmap &&
         a.mnnPrecision == b.mnnPrecision &&

@@ -59,7 +59,11 @@ class ModelFormatBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = theme.palette.engineColor(engine);
-    final label = engine == InferenceEngine.mnn ? 'MNN' : 'GGUF';
+    final label = switch (engine) {
+      InferenceEngine.mnn => 'MNN',
+      InferenceEngine.miniCpm => 'LES',
+      InferenceEngine.llamaCpp => 'GGUF',
+    };
 
     return Container(
       width: size,

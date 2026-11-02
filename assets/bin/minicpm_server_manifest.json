@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "version": "e0eca9d8-servllama-1",
+  "variant": "cpu",
+  "source": {
+    "repository": "https://github.com/tc-mb/llama.cpp-omni",
+    "commit": "e0eca9d8f57ac8f5a5ad6191a8007b93436c1e71",
+    "patch": "patches/minicpm/servllama-http.patch",
+    "modified": true
+  },
+  "abi": "arm64-v8a",
+  "minSdk": 28,
+  "backends": [
+    "cpu"
+  ],
+  "externalDependencies": [
+    "libc.so",
+    "libm.so",
+    "libdl.so"
+  ],
+  "license": {
+    "asset": "assets/licenses/minicpm-native.txt",
+    "sha256": "481e8279b9f056a984e2728348be8f6afdb758f19a1fc8734c2c1a65da9fbe66"
+  },
+  "libraries": [
+    {
+      "name": "libminicpm-server.so",
+      "sha256": "373666ccde359b7118abec56f06b16af296263bd16eae8c3a455ff670a94873d",
+      "bytes": 9057848
+    }
+  ],
+  "build": {
+    "ndk": "27.0.12077973",
+    "androidApi": 28,
+    "pageAlignment": 16384,
+    "internalLibraries": "static",
+    "cppRuntime": "static",
+    "command": "native/minicpm/build.sh android"
+  }
+}

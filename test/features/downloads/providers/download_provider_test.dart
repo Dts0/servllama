@@ -1,3 +1,5 @@
+import 'package:servllama/core/models/mini_cpm_bundle.dart';
+import 'package:servllama/core/repositories/mini_cpm_model_repository.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -45,6 +47,26 @@ void main() {
       if (await tempDirectory.exists()) {
         await tempDirectory.delete(recursive: true);
       }
+    });
+
+    test('pinned LES task cannot switch source or lose its revision', () async {
+      final record = _record(stagingDirPath: tempDirectory.path,
+        status: DownloadStatus.paused, engineValue: 'mini_cpm');
+      record.sourceValue = 'huggingface';
+      record.revision = '7a7ab2ac8f045d53574ead3324b97e709d0e318b';
+      final repository = _MemoryTaskRepository([record]);
+      final downloads = _BlockingDownloadService();
+      final provider = DownloadProvider(taskRepository: repository,
+        downloadService: downloads, settingsStore: _MemorySettingsStore(),
+        localModelRepository: _FakeLocalModelRepository(), logger: AppLogger());
+      addTearDown(provider.dispose);
+      await provider.load(startTransfers: false);
+      await provider.switchSource(record.id, ModelHubSource.modelScope);
+      final saved = (await repository.listTasks()).single;
+      expect(saved.sourceValue, 'huggingface');
+      expect(saved.revision, record.revision);
+      expect(saved.statusValue, DownloadStatus.paused.name);
+      expect(downloads.callCount, 0);
     });
 
     test(
@@ -304,6 +326,7 @@ void main() {
       () async {
         final coordinator = ModelNameCoordinator(
           unifiedRepository: UnifiedModelRepository(
+            miniCpmModelRepository: _EmptyMiniCpmRepository(),
             localModelRepository: _FakeLocalModelRepository(),
           ),
         );
@@ -712,6 +735,7 @@ class _ThrowingNameCoordinator extends ModelNameCoordinator {
   _ThrowingNameCoordinator(this.onAllocate)
     : super(
         unifiedRepository: UnifiedModelRepository(
+          miniCpmModelRepository: _EmptyMiniCpmRepository(),
           localModelRepository: _FakeLocalModelRepository(),
         ),
       );
@@ -730,4 +754,9 @@ class _ThrowingNameCoordinator extends ModelNameCoordinator {
       ModelOperationErrorCode.modelNameExists,
     );
   }
+}
+
+class _EmptyMiniCpmRepository extends MiniCpmModelRepository {
+  @override
+  Future<List<MiniCpmModelDescriptor>> listModels() async => [];
 }

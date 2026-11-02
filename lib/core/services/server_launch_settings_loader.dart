@@ -92,6 +92,20 @@ class ServerLaunchSettingsLoader {
         ServerLaunchSettings.minLlamaCppGpuLayers,
         ServerLaunchSettings.maxLlamaCppGpuLayers,
       ),
+      miniCpmMicroBatch: _positive(
+        await _kvStorage.getInt(ServerPrefsKeys.miniCpmMicroBatch),
+        32,
+      ),
+      miniCpmSlotBank: _positive(
+        await _kvStorage.getInt(ServerPrefsKeys.miniCpmSlotBank),
+        256,
+      ),
+      miniCpmCacheWindow: _nonNegative(
+        await _kvStorage.getInt(ServerPrefsKeys.miniCpmCacheWindow),
+        0,
+      ),
+      miniCpmReasoning:
+          await _kvStorage.getBool(ServerPrefsKeys.miniCpmReasoning) ?? true,
       mnnBackend: mnnBackend,
       mnnUseMmap:
           await _kvStorage.getBool(ServerPrefsKeys.mnnUseMmap) ??
@@ -147,6 +161,22 @@ class ServerLaunchSettingsLoader {
     await _kvStorage.setInt(
       ServerPrefsKeys.llamaCppGpuLayers,
       settings.llamaCppGpuLayers,
+    );
+    await _kvStorage.setInt(
+      ServerPrefsKeys.miniCpmMicroBatch,
+      settings.miniCpmMicroBatch,
+    );
+    await _kvStorage.setInt(
+      ServerPrefsKeys.miniCpmSlotBank,
+      settings.miniCpmSlotBank,
+    );
+    await _kvStorage.setInt(
+      ServerPrefsKeys.miniCpmCacheWindow,
+      settings.miniCpmCacheWindow,
+    );
+    await _kvStorage.setBool(
+      ServerPrefsKeys.miniCpmReasoning,
+      settings.miniCpmReasoning,
     );
     await _kvStorage.setString(
       ServerPrefsKeys.mnnBackend,
@@ -210,6 +240,11 @@ class ServerLaunchSettingsLoader {
       return ServerLaunchSettings.defaultLogLevel;
     }
   }
+
+  int _positive(int? value, int fallback) =>
+      value != null && value > 0 && value <= 2147483647 ? value : fallback;
+  int _nonNegative(int? value, int fallback) =>
+      value != null && value >= 0 && value <= 2147483647 ? value : fallback;
 
   int _clamp(int value, int min, int max) {
     if (value < min) {

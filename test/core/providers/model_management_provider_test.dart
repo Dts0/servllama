@@ -1,3 +1,5 @@
+import 'package:servllama/core/models/mini_cpm_bundle.dart';
+import 'package:servllama/core/repositories/mini_cpm_model_repository.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -42,6 +44,7 @@ void main() {
         );
         final logger = AppLogger();
         final provider = ModelManagementProvider(
+          miniCpmRepository: _EmptyMiniCpmRepository(),
           repository: FakeLocalModelRepository(),
           unifiedRepository: _StrictUnifiedRepository(),
           logger: logger,
@@ -67,6 +70,7 @@ void main() {
         ],
       );
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: repository,
         filePicker: FakeGgufFilePicker(),
         logger: AppLogger(),
@@ -84,6 +88,7 @@ void main() {
       () async {
         final repository = _StrictUnifiedRepository();
         final provider = ModelManagementProvider(
+          miniCpmRepository: _EmptyMiniCpmRepository(),
           repository: FakeLocalModelRepository(),
           unifiedRepository: repository,
         );
@@ -105,6 +110,7 @@ void main() {
     test('importModel keeps list unchanged when picker is cancelled', () async {
       final repository = FakeLocalModelRepository();
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: repository,
         filePicker: FakeGgufFilePicker(),
         logger: AppLogger(),
@@ -122,6 +128,7 @@ void main() {
       final completer = Completer<ModelDescriptor>();
       repository.importCompleter = completer;
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: repository,
         filePicker: FakeGgufFilePicker(
           pickedFile: const PickedGgufFile(
@@ -152,6 +159,7 @@ void main() {
         ],
       );
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: repository,
         filePicker: FakeGgufFilePicker(
           pickedFile: const PickedGgufFile(
@@ -182,6 +190,7 @@ void main() {
         final completer = Completer<ModelDescriptor>();
         repository.importCompleter = completer;
         final provider = ModelManagementProvider(
+          miniCpmRepository: _EmptyMiniCpmRepository(),
           repository: repository,
           filePicker: FakeGgufFilePicker(
             pickedFile: const PickedGgufFile(
@@ -208,6 +217,7 @@ void main() {
         ],
       );
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: repository,
         filePicker: FakeGgufFilePicker(),
         logger: AppLogger(),
@@ -232,6 +242,7 @@ void main() {
         ],
       )..importMmprojGate = Completer<void>();
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: repository,
         filePicker: FakeGgufFilePicker(
           pickedMmprojFile: const PickedGgufFile(
@@ -268,6 +279,7 @@ void main() {
         ],
       );
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: repository,
         filePicker: FakeGgufFilePicker(),
         logger: AppLogger(),
@@ -290,6 +302,7 @@ void main() {
     test('manual rename still rejects a duplicate name', () async {
       final unifiedRepository = _StrictUnifiedRepository();
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(),
         unifiedRepository: unifiedRepository,
         filePicker: FakeGgufFilePicker(),
@@ -317,6 +330,7 @@ void main() {
         ],
       );
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: repository,
         filePicker: FakeGgufFilePicker(),
         logger: AppLogger(),
@@ -331,6 +345,7 @@ void main() {
 
     test('formats file picker errors for mmproj import message', () async {
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(),
         filePicker: FakeGgufFilePicker(
           error: PlatformException(code: 'FilePicker', message: '文件不可用'),
@@ -353,6 +368,7 @@ void main() {
             ModelOperationErrorCode.invalidModelName,
           );
         final provider = ModelManagementProvider(
+          miniCpmRepository: _EmptyMiniCpmRepository(),
           repository: repository,
           filePicker: FakeGgufFilePicker(
             pickedFile: const PickedGgufFile(
@@ -375,6 +391,7 @@ void main() {
       'formats file picker platform errors for user-facing message',
       () async {
         final provider = ModelManagementProvider(
+          miniCpmRepository: _EmptyMiniCpmRepository(),
           repository: FakeLocalModelRepository(),
           filePicker: FakeGgufFilePicker(
             error: PlatformException(code: 'FilePicker', message: '不支持该文件过滤器'),
@@ -601,4 +618,9 @@ ModelDescriptor _descriptor({
     importedAt: DateTime(2026, 1, 1),
     mmprojFilePath: mmprojFilePath,
   );
+}
+
+class _EmptyMiniCpmRepository extends MiniCpmModelRepository {
+  @override
+  Future<List<MiniCpmModelDescriptor>> listModels() async => [];
 }

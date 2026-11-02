@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = {
     "libflutter.so",
     "libllama-server.so",
+    "libminicpm-server.so",
     "libMNN.so",
     "libmnn_engine_jni.so",
     "libsherpa-onnx-c-api.so",
@@ -139,6 +140,11 @@ def audit(apk, manifest_path, jni_directory, llama_manifest_path=None):
     else:
         spec, errors = source_runtime_spec(jni_directory)
         llama_records = {}
+    mini_path = ROOT / "assets/bin/minicpm_server_manifest.json"
+    mini = json.loads(mini_path.read_text(encoding="utf-8"))
+    mini_records = {item["name"]: item for item in mini["libraries"]}
+    if set(mini_records) != {"libminicpm-server.so"} or mini.get("abi") != "arm64-v8a":
+        errors.append("MiniCPM runtime must be a single isolated ARM64 executable")
     if distribution == "official" and (llama["version"] != VERSION or llama["source"]["commit"] != COMMIT or
             llama["source"]["tag"] != VERSION or llama["source"]["buildTag"] != BUILD or
             llama["minSdk"] != spec["minSdk"] or
@@ -149,6 +155,17 @@ def audit(apk, manifest_path, jni_directory, llama_manifest_path=None):
                                         len(llama_records) != len(llama["libraries"])):
         errors.append("Runtime manifest libraries do not match the selected official variant")
     with zipfile.ZipFile(apk) as archive:
+        try:
+            embedded_mini = json.loads(archive.read(
+                "assets/flutter_assets/assets/bin/minicpm_server_manifest.json"))
+            if embedded_mini != mini:
+                errors.append("Embedded MiniCPM manifest differs from build manifest")
+            license_info = mini["license"]
+            license_data = archive.read("assets/flutter_assets/" + license_info["asset"])
+            if hashlib.sha256(license_data).hexdigest() != license_info["sha256"]:
+                errors.append("MiniCPM license checksum mismatch")
+        except (KeyError, ValueError) as error:
+            errors.append(f"Missing or invalid MiniCPM manifest/license: {error}")
         asset = "assets/flutter_assets/assets/bin/llama_server_manifest.json"
         try:
             if json.loads(archive.read(asset)) != llama:
@@ -227,6 +244,18 @@ def audit(apk, manifest_path, jni_directory, llama_manifest_path=None):
                     unresolved = set(dynamic["needed"]) - allowed
                     if unresolved:
                         errors.append(f"{name}: unresolved source dependencies: {sorted(unresolved)}")
+                if name in mini_records:
+                    expected = mini_records[name]
+                    matches = digest == expected["sha256"] and len(data) == expected["bytes"]
+                    record["minicpm_source_matches"] = matches
+                    if not matches:
+                        errors.append(f"{name}: differs from pinned MiniCPM manifest")
+                    dynamic = elf_metadata(data)
+                    record["needed"] = dynamic["needed"]
+                    # The fork is statically linked; it may not resolve official llama/ggml libraries.
+                    unresolved = set(dynamic["needed"]) - ANDROID_SYSTEM
+                    if unresolved:
+                        errors.append(f"{name}: non-system dependencies break isolation: {sorted(unresolved)}")
                 if name in llama_records:
                     expected = llama_records[name]
                     matches = digest == expected["sha256"] and len(data) == expected["bytes"]

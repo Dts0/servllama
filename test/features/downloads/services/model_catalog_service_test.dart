@@ -7,7 +7,7 @@ import 'package:servllama/features/downloads/models/model_hub.dart';
 import 'package:servllama/features/downloads/services/model_catalog_service.dart';
 
 void main() {
-  test('featured catalog lists current GGUF and MNN picks with both hubs', () async {
+  test('featured catalog preserves picks and adds explicit experimental LES bundle', () async {
     final json = File('assets/catalog/model_catalog.json').readAsStringSync();
     final catalog = ModelCatalogService(assetBundle: _StringAssetBundle(json));
     final entries = await catalog.load();
@@ -15,6 +15,7 @@ void main() {
     expect(
       entries.map((entry) => entry.id).toList(),
       <String>[
+        'minicpm-v-4.7-35b-a3b-les',
         'qwen3.5-0.8b-gguf',
         'qwen3.5-2b-gguf',
         'qwen3.5-4b-gguf',
@@ -35,6 +36,7 @@ void main() {
     expect(
       {for (final entry in entries) entry.id: entry.summaryKey},
       <String, String>{
+        'minicpm-v-4.7-35b-a3b-les': 'experimentalMiniCpmLes',
         'qwen3.5-0.8b-gguf': 'verifiedSmallGeneralist',
         'qwen3.5-2b-gguf': 'verifiedBalanced',
         'qwen3.5-4b-gguf': 'verifiedStrong',
@@ -49,7 +51,9 @@ void main() {
 
     for (final entry in entries) {
       expect(entry.sources[ModelHubSource.huggingFace], isNotEmpty);
-      expect(entry.sources[ModelHubSource.modelScope], isNotEmpty);
+      if (entry.engine != InferenceEngine.miniCpm) {
+        expect(entry.sources[ModelHubSource.modelScope], isNotEmpty);
+      }
     }
 
     expect(

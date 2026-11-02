@@ -1,3 +1,4 @@
+import '../../../support/empty_mini_cpm_repository.dart';
 import 'package:servllama/core/services/llama_cpp_device_probe_service.dart';
 import 'package:servllama/core/models/llama_cpp_backend.dart';
 import 'dart:async';
@@ -175,6 +176,7 @@ void main() {
       await chatProvider.load();
 
       final library = ModelManagementProvider(
+        miniCpmRepository: EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(
           initialModels: <ModelDescriptor>[_libraryDescriptor('alpha')],
         ),
@@ -378,6 +380,7 @@ void main() {
       await chatProvider.load();
 
       final library = ModelManagementProvider(
+        miniCpmRepository: EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(
           initialModels: <ModelDescriptor>[_libraryDescriptor('alpha')],
         ),
@@ -453,6 +456,7 @@ void main() {
       await chatProvider.load();
 
       final library = ModelManagementProvider(
+        miniCpmRepository: EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(
           initialModels: <ModelDescriptor>[
             _libraryDescriptor('alpha'),
@@ -1762,6 +1766,7 @@ void main() {
       await chatProvider.load();
 
       final library = ModelManagementProvider(
+        miniCpmRepository: EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(
           initialModels: <ModelDescriptor>[_libraryDescriptor('alpha')],
         ),
@@ -1887,6 +1892,7 @@ void main() {
         await chatProvider.load();
 
         final library = ModelManagementProvider(
+          miniCpmRepository: EmptyMiniCpmRepository(),
           repository: FakeLocalModelRepository(
             initialModels: <ModelDescriptor>[_libraryDescriptor('alpha')],
           ),
@@ -1947,7 +1953,10 @@ void main() {
           find.byKey(const Key('chat_engine_start_option_mnn')),
           findsOneWidget,
         );
-        expect(find.text('默认模型：未选择模型'), findsNWidgets(2));
+        expect(
+          find.text('默认模型：未选择模型'),
+          findsNWidgets(InferenceEngine.values.length),
+        );
         expect(serverService.startCallCount, 0);
 
         await tester.tap(
@@ -2048,7 +2057,9 @@ class _TestChatApp extends StatelessWidget {
         // and the model sheet lists downloads in flight (FR-C1 / FR-C3).
         if (library == null)
           ChangeNotifierProvider<ModelManagementProvider>(
-            create: (_) => ModelManagementProvider(),
+            create: (_) => ModelManagementProvider(
+              miniCpmRepository: EmptyMiniCpmRepository(),
+            ),
           )
         else
           ChangeNotifierProvider<ModelManagementProvider>.value(

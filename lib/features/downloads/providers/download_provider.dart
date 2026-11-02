@@ -1,3 +1,5 @@
+import 'package:servllama/core/models/mini_cpm_bundle.dart';
+import 'package:servllama/core/repositories/mini_cpm_model_repository.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -35,6 +37,7 @@ class DownloadProvider extends ChangeNotifier {
     ModelDownloadService? downloadService,
     DownloadSettingsStore? settingsStore,
     LocalModelRepository? localModelRepository,
+    MiniCpmModelRepository? miniCpmModelRepository,
     MnnEngine? mnnEngine,
     AppLogger? logger,
     DownloadEnvironmentService? environmentService,
@@ -47,6 +50,8 @@ class DownloadProvider extends ChangeNotifier {
        _downloadService = downloadService ?? ModelDownloadService(),
        _settingsStore = settingsStore ?? DownloadSettingsStore(),
        _localModelRepository = localModelRepository ?? LocalModelRepository(),
+       _miniCpmModelRepository =
+           miniCpmModelRepository ?? MiniCpmModelRepository(),
        _mnnEngine = mnnEngine ?? MnnEngine.instance,
        _logger = logger ?? AppLogger.instance,
        _environmentService =
@@ -63,6 +68,7 @@ class DownloadProvider extends ChangeNotifier {
   final ModelDownloadService _downloadService;
   final DownloadSettingsStore _settingsStore;
   final LocalModelRepository _localModelRepository;
+  final MiniCpmModelRepository _miniCpmModelRepository;
   final MnnEngine _mnnEngine;
   final AppLogger _logger;
   final DownloadEnvironmentService _environmentService;
@@ -275,6 +281,19 @@ class DownloadProvider extends ChangeNotifier {
     String? targetModelId,
   }) async {
     await load();
+    if (engine == InferenceEngine.miniCpm) {
+      (await MiniCpmBundle.load()).validateDownload(
+        source: source,
+        repoId: repoId,
+        revision: revision,
+        files: files,
+      );
+      if (targetModelId != null) {
+        throw const FormatException(
+          "LES components cannot be replaced individually",
+        );
+      }
+    }
     await _ensureStorageCapacity(engine, files);
     return _mutateQueue(() async {
       if (_hasEquivalentTask(
@@ -413,6 +432,8 @@ class DownloadProvider extends ChangeNotifier {
   Future<void> switchSource(String taskId, ModelHubSource source) async {
     final record = _tasks[taskId];
     if (record == null ||
+        InferenceEngine.fromStorageValue(record.engineValue) ==
+            InferenceEngine.miniCpm ||
         !DownloadStatus.fromName(record.statusValue).isResumable) {
       return;
     }
@@ -484,6 +505,10 @@ class DownloadProvider extends ChangeNotifier {
 
     try {
       await _taskRepository.save(record);
+      if (InferenceEngine.fromStorageValue(record.engineValue) ==
+          InferenceEngine.miniCpm) {
+        await _validateMiniCpmTask(record);
+      }
       final source = ModelHubSource.fromStorageValue(record.sourceValue);
       final client = await _clientFor(source);
       final headers = client.authHeaders(_settings.tokenFor(source));
@@ -556,6 +581,29 @@ class DownloadProvider extends ChangeNotifier {
   }
 
   /// Moves the staged bytes into whichever store owns this engine's format.
+  Future<void> _validateMiniCpmTask(DownloadTaskRecord record) async {
+    final bundle = await MiniCpmBundle.load();
+    if (record.sourceValue != ModelHubSource.huggingFace.storageValue ||
+        record.targetModelId != null ||
+        record.files.any((f) => f.fileName != f.remotePath)) {
+      throw const FormatException('Invalid persisted LES task');
+    }
+    bundle.validateDownload(
+      source: ModelHubSource.huggingFace,
+      repoId: record.repoId,
+      revision: record.revision,
+      files: record.files
+          .map(
+            (f) => HubRepoFile(
+              path: f.remotePath,
+              sizeBytes: f.totalBytes,
+              sha256: f.sha256,
+            ),
+          )
+          .toList(),
+    );
+  }
+
   Future<void> _commit(DownloadTaskRecord record, Directory staging) async {
     final isMmprojReplacement =
         record.targetModelId != null && record.targetModelId!.trim().isNotEmpty;
@@ -579,6 +627,13 @@ class DownloadProvider extends ChangeNotifier {
     }
     final engine = InferenceEngine.fromStorageValue(record.engineValue);
     switch (engine) {
+      case InferenceEngine.miniCpm:
+        final bundle = await MiniCpmBundle.load();
+        await _validateMiniCpmTask(record);
+        await _miniCpmModelRepository.adoptDownloadedBundle(
+          directory: Directory('${staging.path}/${bundle.remoteDirectory}'),
+          modelName: record.modelName,
+        );
       case InferenceEngine.llamaCpp:
         File? modelFile;
         File? mmprojFile;
@@ -712,7 +767,7 @@ class DownloadProvider extends ChangeNotifier {
 
   String _completedNotice(DownloadTaskRecord record) {
     final engine = InferenceEngine.fromStorageValue(record.engineValue);
-    if (engine == InferenceEngine.mnn) {
+    if (engine.usesDirectoryModels) {
       return record.modelName;
     }
     final isMmprojReplacement =

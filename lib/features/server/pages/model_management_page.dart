@@ -94,6 +94,12 @@ class _ModelManagementViewState extends State<_ModelManagementView>
           context,
           () => context.read<ModelManagementProvider>().importModel(),
         );
+      case _AddModelChoice.miniCpmDirectory:
+        await _runImport(
+          context,
+          () =>
+              context.read<ModelManagementProvider>().importMiniCpmDirectory(),
+        );
       case _AddModelChoice.mnnDirectory:
         await _runImport(
           context,
@@ -268,7 +274,9 @@ class _ModelManagementViewState extends State<_ModelManagementView>
                 ),
           floatingActionButton: FloatingActionButton.extended(
             key: const Key('model_management_import_fab'),
-            onPressed: provider.isImporting
+            onPressed: provider.isImportingMiniCpm
+                ? () => provider.cancelMiniCpmImport()
+                : provider.isImporting
                 ? null
                 : () => _openAddSheet(context),
             icon: provider.isImporting
@@ -282,7 +290,9 @@ class _ModelManagementViewState extends State<_ModelManagementView>
                   )
                 : const Icon(Icons.add_rounded),
             label: Text(
-              provider.isImporting
+              provider.isImportingMiniCpm
+                  ? "${l10n.modelManagementImporting} · ${l10n.commonCancel}"
+                  : provider.isImporting
                   ? l10n.modelManagementImporting
                   : l10n.localModelImport,
             ),
@@ -428,8 +438,9 @@ class _ModelManagementViewState extends State<_ModelManagementView>
                                               context,
                                               descriptor,
                                             );
-                                          } else if (model.engine ==
-                                              InferenceEngine.mnn) {
+                                          } else if (model
+                                              .engine
+                                              .usesDirectoryModels) {
                                             _showMnnModelSettings(
                                               context,
                                               model,
@@ -476,6 +487,8 @@ class _ModelManagementViewState extends State<_ModelManagementView>
               return model.engine == InferenceEngine.llamaCpp;
             case _LibraryFilter.mnn:
               return model.engine == InferenceEngine.mnn;
+            case _LibraryFilter.miniCpm:
+              return model.engine == InferenceEngine.miniCpm;
             case _LibraryFilter.vision:
               return model.supportsVision;
             case _LibraryFilter.tools:
@@ -493,6 +506,8 @@ class _ModelManagementViewState extends State<_ModelManagementView>
         return engine == InferenceEngine.llamaCpp;
       case _LibraryFilter.mnn:
         return engine == InferenceEngine.mnn;
+      case _LibraryFilter.miniCpm:
+        return engine == InferenceEngine.miniCpm;
       case _LibraryFilter.vision:
       case _LibraryFilter.tools:
         return false;
@@ -523,9 +538,9 @@ class _ModelManagementViewState extends State<_ModelManagementView>
       : ModelHubSource.huggingFace;
 }
 
-enum _LibraryFilter { all, llamaCpp, mnn, vision, tools }
+enum _LibraryFilter { all, llamaCpp, mnn, miniCpm, vision, tools }
 
-enum _AddModelChoice { ggufFile, mnnDirectory }
+enum _AddModelChoice { ggufFile, mnnDirectory, miniCpmDirectory }
 
 class _AddModelSheet extends StatefulWidget {
   const _AddModelSheet();
@@ -561,6 +576,10 @@ class _AddModelSheetState extends State<_AddModelSheet> {
                   value: _AddModelChoice.mnnDirectory,
                   label: Text('MNN'),
                 ),
+                ButtonSegment(
+                  value: _AddModelChoice.miniCpmDirectory,
+                  label: Text('MiniCPM LES'),
+                ),
               ],
               selected: {choice},
               onSelectionChanged: (v) => setState(() => choice = v.single),
@@ -572,8 +591,20 @@ class _AddModelSheetState extends State<_AddModelSheet> {
                     ? Icons.insert_drive_file_outlined
                     : Icons.folder_open_rounded,
               ),
-              title: Text(gguf ? l.modelAddGguf : l.modelAddMnnDir),
-              subtitle: Text(gguf ? l.modelAddGgufDesc : l.modelAddMnnDirDesc),
+              title: Text(
+                choice == _AddModelChoice.miniCpmDirectory
+                    ? l.miniCpmImportDirectory
+                    : gguf
+                    ? l.modelAddGguf
+                    : l.modelAddMnnDir,
+              ),
+              subtitle: Text(
+                choice == _AddModelChoice.miniCpmDirectory
+                    ? "选择包含主模型、mmproj 和 experts 的目录；复制并校验全部 43 个文件。 / All 43 files required."
+                    : gguf
+                    ? l.modelAddGgufDesc
+                    : l.modelAddMnnDirDesc,
+              ),
             ),
             Text(l.localModelImportHelp),
             const SizedBox(height: 16),
@@ -722,6 +753,12 @@ class _EngineFilterBar extends StatelessWidget {
                 '${counts[InferenceEngine.mnn] ?? 0}',
             isSelected: selected == _LibraryFilter.mnn,
             onTap: () => onChanged(_LibraryFilter.mnn),
+          ),
+          const SizedBox(width: 8),
+          _FilterChip(
+            label: 'MiniCPM · ${counts[InferenceEngine.miniCpm] ?? 0}',
+            isSelected: selected == _LibraryFilter.miniCpm,
+            onTap: () => onChanged(_LibraryFilter.miniCpm),
           ),
           const SizedBox(width: 8),
           _FilterChip(
@@ -1062,7 +1099,7 @@ class _MnnModelSettingsSheetState extends State<_MnnModelSettingsSheet> {
       }
     }
     for (final model in provider.libraryModels) {
-      if (model.engine == InferenceEngine.mnn &&
+      if (model.engine == widget.model.engine &&
           model.name == _nameController.text.trim()) {
         _currentLibraryId = model.id;
         return model;
@@ -1129,7 +1166,7 @@ class _MnnModelSettingsSheetState extends State<_MnnModelSettingsSheet> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    ModelFormatBadge(engine: InferenceEngine.mnn),
+                    ModelFormatBadge(engine: model.engine),
                   ],
                 ),
                 const SizedBox(height: 22),

@@ -15,6 +15,10 @@ class ServerPrefsKeys {
   static const String logLevel = 'server.log_level';
   static const String llamaCppBackend = 'server.llama_cpp_backend';
   static const String llamaCppGpuLayers = 'server.llama_cpp_gpu_layers';
+  static const String miniCpmMicroBatch = 'server.mini_cpm.micro_batch';
+  static const String miniCpmSlotBank = 'server.mini_cpm.slot_bank';
+  static const String miniCpmCacheWindow = 'server.mini_cpm.cache_window';
+  static const String miniCpmReasoning = 'server.mini_cpm.reasoning';
   static const String mnnBackend = 'server.mnn_backend';
   static const String mnnUseMmap = 'server.mnn_use_mmap';
   static const String mnnPrecision = 'server.mnn_precision';

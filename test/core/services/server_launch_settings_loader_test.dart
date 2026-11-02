@@ -18,16 +18,35 @@ void main() {
   });
 
   group('ServerLaunchSettingsLoader', () {
-    test('persists 256K without changing GPU', () async {
+    test('persists 256K and independent LES parameters without changing GPU', () async {
       await loader.save(
         const ServerLaunchSettings(
           contextSize: 262144,
+          miniCpmMicroBatch: 128,
+          miniCpmSlotBank: 768,
+          miniCpmCacheWindow: 6,
+          miniCpmReasoning: false,
           llamaCppBackend: LlamaCppBackend.hexagon,
         ),
       );
       final settings = await loader.load();
       expect(settings.contextSize, 262144);
+      expect(settings.miniCpmMicroBatch, 128);
+      expect(settings.miniCpmSlotBank, 768);
+      expect(settings.miniCpmCacheWindow, 6);
+      expect(settings.miniCpmReasoning, isFalse);
       expect(settings.llamaCppBackend, LlamaCppBackend.hexagon);
+    });
+    test('invalid LES allocations use safe defaults', () async {
+      SharedPreferences.setMockInitialValues({
+        ServerPrefsKeys.miniCpmMicroBatch: 0,
+        ServerPrefsKeys.miniCpmSlotBank: -1,
+        ServerPrefsKeys.miniCpmCacheWindow: -1,
+      });
+      final settings = await loader.load();
+      expect(settings.miniCpmMicroBatch, 32);
+      expect(settings.miniCpmSlotBank, 256);
+      expect(settings.miniCpmCacheWindow, 0);
     });
 
     test('returns defaults when prefs are missing', () async {

@@ -1,3 +1,4 @@
+import 'package:servllama/core/security/mini_cpm_log_sanitizer.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -28,11 +29,24 @@ class LlamaServerService implements LlamaServerProcessService {
 
   factory LlamaServerService() => _instance;
 
-  LlamaServerService._internal();
+  LlamaServerService._internal({
+    String binaryFileName = 'libllama-server.so',
+    String manifestAssetPath = 'assets/bin/llama_server_manifest.json',
+    bool isOfficial = true,
+  }) : _binaryFileName = binaryFileName,
+       _manifestAssetPath = manifestAssetPath,
+       _isOfficial = isOfficial;
 
-  static const String _binaryFileName = 'libllama-server.so';
-  static const String _manifestAssetPath =
-      'assets/bin/llama_server_manifest.json';
+  static final LlamaServerService _miniCpmInstance =
+      LlamaServerService._internal(
+        binaryFileName: 'libminicpm-server.so',
+        manifestAssetPath: 'assets/bin/minicpm_server_manifest.json',
+        isOfficial: false,
+      );
+  factory LlamaServerService.miniCpm() => _miniCpmInstance;
+  final bool _isOfficial;
+  final String _binaryFileName;
+  final String _manifestAssetPath;
 
   // Leftovers from the removed assets-based installer; kept only for cleanup.
   static const String _legacyBinaryDirectoryName = 'bin';
@@ -104,7 +118,7 @@ class LlamaServerService implements LlamaServerProcessService {
     }
     _isStarting = true;
 
-    unawaited(_cleanupLegacyInstall());
+    if (_isOfficial) unawaited(_cleanupLegacyInstall());
 
     try {
       final nativeLibraryDir = await _nativeLibraryDirService
@@ -118,7 +132,7 @@ class LlamaServerService implements LlamaServerProcessService {
         inMemory: true,
       );
       _logger.info(
-        'Command: $binaryPath ${arguments.join(' ')}',
+        'Runtime: $_binaryFileName',
         channel: LogChannel.server,
         inMemory: true,
       );
@@ -133,28 +147,31 @@ class LlamaServerService implements LlamaServerProcessService {
       _process = process;
       _emitRunningState(true);
 
-      process.stdout
-          .transform(const Utf8Decoder(allowMalformed: true))
-          .listen(
-            (data) => _handleProcessOutput(data, isError: false),
-            onError: (Object error) => _logger.warning(
-              'Failed to read server stdout',
-              channel: LogChannel.server,
-              inMemory: true,
-              error: error,
-            ),
-          );
-      process.stderr
-          .transform(const Utf8Decoder(allowMalformed: true))
-          .listen(
-            (data) => _handleProcessOutput(data, isError: true),
-            onError: (Object error) => _logger.warning(
-              'Failed to read server stderr',
-              channel: LogChannel.server,
-              inMemory: true,
-              error: error,
-            ),
-          );
+      final sanitizer = MiniCpmLogSanitizer(
+        arguments: arguments,
+        binaryPath: binaryPath,
+      );
+      Stream<String> output(Stream<List<int>> bytes) => _isOfficial
+          ? bytes.transform(const Utf8Decoder(allowMalformed: true))
+          : sanitizer.decode(bytes);
+      output(process.stdout).listen(
+        (data) => _handleProcessOutput(data, isError: false),
+        onError: (Object error) => _logger.warning(
+          'Failed to read server stdout',
+          channel: LogChannel.server,
+          inMemory: true,
+          error: _isOfficial ? error : null,
+        ),
+      );
+      output(process.stderr).listen(
+        (data) => _handleProcessOutput(data, isError: true),
+        onError: (Object error) => _logger.warning(
+          'Failed to read server stderr',
+          channel: LogChannel.server,
+          inMemory: true,
+          error: _isOfficial ? error : null,
+        ),
+      );
       process.exitCode.then((code) async {
         // A stale handler from a previous run must not touch the state of a
         // server that was restarted in the meantime.
@@ -189,7 +206,7 @@ class LlamaServerService implements LlamaServerProcessService {
         'Server started failed',
         channel: LogChannel.server,
         inMemory: true,
-        error: error,
+        error: _isOfficial ? error : null,
       );
       if (_process != null) {
         await stopServer();
@@ -228,7 +245,7 @@ class LlamaServerService implements LlamaServerProcessService {
         'Failed to clean up legacy llama-server install',
         channel: LogChannel.server,
         inMemory: true,
-        error: error,
+        error: _isOfficial ? error : null,
       );
     }
   }
@@ -294,7 +311,7 @@ class LlamaServerService implements LlamaServerProcessService {
         'Failed to stop service',
         channel: LogChannel.server,
         inMemory: true,
-        error: error,
+        error: _isOfficial ? error : null,
       );
       // Keep ownership until exitCode confirms termination. Clearing an
       // unknown process here would let speech load over a still-resident LLM.

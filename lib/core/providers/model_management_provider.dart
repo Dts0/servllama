@@ -1,3 +1,8 @@
+import 'dart:io';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:servllama/core/models/mini_cpm_bundle.dart';
+import 'package:servllama/core/repositories/mini_cpm_model_repository.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:mnn_engine/mnn_engine.dart';
@@ -15,6 +20,7 @@ import 'package:servllama/core/services/model_name_coordinator.dart';
 class ModelManagementProvider extends ChangeNotifier {
   ModelManagementProvider({
     LocalModelRepository? repository,
+    MiniCpmModelRepository? miniCpmRepository,
     UnifiedModelRepository? unifiedRepository,
     GgufFilePicker? filePicker,
     MnnEngine? mnnEngine,
@@ -30,7 +36,11 @@ class ModelManagementProvider extends ChangeNotifier {
   }) : _repository = repository ?? LocalModelRepository(),
        _unifiedRepository =
            unifiedRepository ??
-           UnifiedModelRepository(localModelRepository: repository),
+           UnifiedModelRepository(
+             localModelRepository: repository,
+             miniCpmModelRepository: miniCpmRepository,
+           ),
+       _miniCpmRepository = miniCpmRepository ?? MiniCpmModelRepository(),
        _filePicker = filePicker ?? GgufFilePicker(),
        _mnnEngine = mnnEngine ?? MnnEngine.instance,
        _logger = logger ?? AppLogger.instance,
@@ -42,6 +52,7 @@ class ModelManagementProvider extends ChangeNotifier {
 
   final Future<void> Function()? onModelDeleted;
   final LocalModelRepository _repository;
+  final MiniCpmModelRepository _miniCpmRepository;
   final UnifiedModelRepository _unifiedRepository;
   final GgufFilePicker _filePicker;
   final MnnEngine _mnnEngine;
@@ -59,6 +70,9 @@ class ModelManagementProvider extends ChangeNotifier {
   bool _disposed = false;
   bool _isLoading = false;
   bool _isImporting = false;
+  bool _isImportingMiniCpm = false;
+  bool _miniCpmImportCancelled = false;
+  bool get isImportingMiniCpm => _isImportingMiniCpm;
   bool _isImportingMmproj = false;
   bool _isRenaming = false;
   Future<void>? _modelRefreshInFlight;
@@ -156,6 +170,88 @@ class ModelManagementProvider extends ChangeNotifier {
         stackTrace: stackTrace,
       );
       rethrow;
+    }
+  }
+
+  Future<void> cancelMiniCpmImport() async {
+    if (!_isImportingMiniCpm) return;
+    _miniCpmImportCancelled = true;
+    try {
+      await const MethodChannel(
+        'com.arkanefans.servllama/minicpm_import',
+      ).invokeMethod<void>('cancelMiniCpmImport');
+    } on PlatformException {
+      /* Hashing cancellation remains active. */
+    }
+  }
+
+  Future<String?> importMiniCpmDirectory() async {
+    if (_isImporting) return null;
+    _isImporting = true;
+    _isImportingMiniCpm = true;
+    _miniCpmImportCancelled = false;
+    notifyListeners();
+    const owner = 'import:minicpm';
+    Directory? staging;
+    try {
+      final bundle = await MiniCpmBundle.load();
+      if (_miniCpmImportCancelled) return null;
+      final result =
+          await const MethodChannel(
+            'com.arkanefans.servllama/minicpm_import',
+          ).invokeMethod<String>('pickMiniCpmDirectory', {
+            'files': [
+              for (final f in bundle.files)
+                {'path': f.path, 'sizeBytes': f.sizeBytes},
+            ],
+          });
+      if (result == null) return null;
+      final root = p.join(
+        (await getApplicationSupportDirectory()).path,
+        'minicpm_import',
+      );
+      if (p.dirname(p.normalize(result)) != root ||
+          await FileSystemEntity.type(result, followLinks: false) !=
+              FileSystemEntityType.directory) {
+        throw const FormatException('Unowned MiniCPM import directory');
+      }
+      staging = Directory(result);
+      final allocation = await _nameCoordinator.reserveAvailable(
+        ownerId: owner,
+        requestedName: bundle.displayName,
+      );
+      await _miniCpmRepository.adoptDownloadedBundle(
+        directory: staging,
+        modelName: allocation.name,
+        shouldContinue: () => !_miniCpmImportCancelled && !_disposed,
+      );
+      await _refreshModelLists();
+      return 'MiniCPM LES: ${allocation.name}';
+    } catch (error, stackTrace) {
+      if (_miniCpmImportCancelled) return null;
+      _logger.error(
+        'MiniCPM LES import failed',
+        channel: LogChannel.model,
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return _l10nService.current.miniCpmImportFailed;
+    } finally {
+      try {
+        if (staging != null && await staging.exists()) {
+          await staging.delete(recursive: true);
+        }
+      } catch (error) {
+        _logger.warning(
+          'MiniCPM staging cleanup failed: $error',
+          channel: LogChannel.model,
+        );
+      } finally {
+        await _nameCoordinator.release(owner);
+        _isImporting = false;
+        _isImportingMiniCpm = false;
+        notifyListeners();
+      }
     }
   }
 

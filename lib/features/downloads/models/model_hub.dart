@@ -74,6 +74,10 @@ enum HubModelFormat {
         return HubModelFormat.gguf;
       case InferenceEngine.mnn:
         return HubModelFormat.mnn;
+      case InferenceEngine.miniCpm:
+        throw UnsupportedError(
+          'LES bundles use the pinned catalog, not GGUF search',
+        );
     }
   }
 }

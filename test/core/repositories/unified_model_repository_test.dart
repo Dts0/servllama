@@ -1,3 +1,5 @@
+import 'package:servllama/core/repositories/mini_cpm_model_repository.dart';
+import 'package:servllama/core/models/mini_cpm_bundle.dart';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -26,6 +28,7 @@ void main() {
           return null;
         });
     final repository = UnifiedModelRepository(
+      miniCpmModelRepository: _EmptyMiniCpmRepository(),
       localModelRepository: _FakeLocalModelRepository(<ModelDescriptor>[
         _descriptor('Shared Name'),
       ]),
@@ -52,6 +55,7 @@ void main() {
           return null;
         });
     final repository = UnifiedModelRepository(
+      miniCpmModelRepository: _EmptyMiniCpmRepository(),
       localModelRepository: _FakeLocalModelRepository(
         const <ModelDescriptor>[],
       ),
@@ -80,6 +84,7 @@ void main() {
           return null;
         });
     final repository = UnifiedModelRepository(
+      miniCpmModelRepository: _EmptyMiniCpmRepository(),
       localModelRepository: _FakeLocalModelRepository(
         const <ModelDescriptor>[],
       ),
@@ -104,6 +109,7 @@ void main() {
             return null;
           });
       final repository = UnifiedModelRepository(
+        miniCpmModelRepository: _EmptyMiniCpmRepository(),
         localModelRepository: _FakeLocalModelRepository(<ModelDescriptor>[
           _descriptor('MODEL'),
           _descriptor('model (3)'),
@@ -131,6 +137,7 @@ void main() {
         });
     final coordinator = ModelNameCoordinator(
       unifiedRepository: UnifiedModelRepository(
+        miniCpmModelRepository: _EmptyMiniCpmRepository(),
         localModelRepository: _FakeLocalModelRepository(
           const <ModelDescriptor>[],
         ),
@@ -159,6 +166,7 @@ void main() {
         });
     final coordinator = ModelNameCoordinator(
       unifiedRepository: UnifiedModelRepository(
+        miniCpmModelRepository: _EmptyMiniCpmRepository(),
         localModelRepository: _FakeLocalModelRepository(
           const <ModelDescriptor>[],
         ),
@@ -215,3 +223,8 @@ Map<String, Object?> _mnnModelMap(String name) => <String, Object?>{
   'importedAt': DateTime(2026).millisecondsSinceEpoch,
   'isActive': false,
 };
+
+class _EmptyMiniCpmRepository extends MiniCpmModelRepository {
+  @override
+  Future<List<MiniCpmModelDescriptor>> listModels() async => [];
+}

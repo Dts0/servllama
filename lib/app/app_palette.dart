@@ -66,6 +66,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
         return engineLlama;
       case InferenceEngine.mnn:
         return engineMnn;
+      case InferenceEngine.miniCpm:
+        return const Color(0xFF9370DB);
     }
   }
 

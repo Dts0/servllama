@@ -107,6 +107,23 @@ void main() {
       ),
     ),
   );
+  testWidgets(
+    'MiniCPM uses actual capacity and never estimates missing usage',
+    (tester) async {
+      chat.engine = runtime.engine = InferenceEngine.miniCpm;
+      await tester.pumpWidget(app());
+      await tester.pump();
+      expect(capacity.requests, hasLength(1));
+      capacity.requests.single.complete(4000);
+      await tester.pumpAndSettle();
+      expect(find.text('25%'), findsOneWidget);
+      chat.tokens = null;
+      chat.changed('unknown-mini-usage');
+      await tester.pumpAndSettle();
+      expect(find.text('-'), findsOneWidget);
+      expect(find.text('25%'), findsNothing);
+    },
+  );
   testWidgets('late model capacity cannot revive a previous model percentage', (
     tester,
   ) async {

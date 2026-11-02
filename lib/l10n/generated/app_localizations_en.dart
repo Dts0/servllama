@@ -3417,4 +3417,71 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatWelcomeDescription => 'What’s on your mind today?';
+
+  @override
+  String get miniCpmCpuNotice =>
+      'MiniCPM / LES uses CPU inference. Model files and runtime are isolated from llama.cpp and MNN. Larger context, batches, parallel slots and expert caches use more memory.';
+
+  @override
+  String get miniCpmSettings => 'MiniCPM / LES settings';
+
+  @override
+  String get miniCpmMicroBatch => 'Physical micro-batch';
+
+  @override
+  String get miniCpmMicroBatchDescription =>
+      'Passed to --ubatch-size. Lower values reduce prefill memory.';
+
+  @override
+  String get miniCpmSlotBank => 'Expert slot bank';
+
+  @override
+  String get miniCpmSlotBankDescription =>
+      'Passed to --moe-slot-bank. The backend validates model-specific requirements.';
+
+  @override
+  String get miniCpmCacheWindow => 'Expert decode cache window';
+
+  @override
+  String get miniCpmCacheWindowDescription =>
+      '0 disables this cache. This is not the prompt token / KV cache.';
+
+  @override
+  String get miniCpmReasoning => 'Allow model reasoning';
+
+  @override
+  String get miniCpmReasoningDescription =>
+      'Auto follows the model template; off disables supported reasoning templates.';
+
+  @override
+  String get catalogSummaryExperimentalMiniCpmLes =>
+      'Experimental CPU LES bundle: requires about 16.6 GB storage. Memory and speed depend on settings and device.';
+
+  @override
+  String get miniCpmDownloadQueued => 'Download queued';
+
+  @override
+  String get miniCpmDownloadFailed =>
+      'Could not queue download. Check the queue and free storage.';
+
+  @override
+  String get miniCpmCatalogUnavailable => 'Model catalog unavailable';
+
+  @override
+  String get miniCpmBundleWarning =>
+      'Experimental CPU backend. SSD expert offload does not guarantee a 3 GB memory footprint. Memory and speed depend on your device and settings.';
+
+  @override
+  String get miniCpmBundleVerification =>
+      'Downloads the model, projector, expert manifest and every shard. SHA-256 is verified before use. Downloads can resume.';
+
+  @override
+  String get miniCpmDownloadBundle => 'Download complete bundle';
+
+  @override
+  String get miniCpmImportDirectory => 'MiniCPM LES complete bundle directory';
+
+  @override
+  String get miniCpmImportFailed =>
+      'MiniCPM LES import failed. Check bundle completeness, matching files and free storage.';
 }

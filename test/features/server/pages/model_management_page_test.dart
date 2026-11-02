@@ -1,3 +1,5 @@
+import 'package:servllama/core/models/mini_cpm_bundle.dart';
+import 'package:servllama/core/repositories/mini_cpm_model_repository.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -62,6 +64,7 @@ void main() {
       tester,
     ) async {
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(),
         filePicker: FakeGgufFilePicker(),
         logger: AppLogger(),
@@ -82,6 +85,7 @@ void main() {
 
     testWidgets('localizes the empty model library in English', (tester) async {
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(),
         filePicker: FakeGgufFilePicker(),
         logger: AppLogger(),
@@ -111,6 +115,7 @@ void main() {
       ]);
       addTearDown(downloads.dispose);
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(
           initialModels: <ModelDescriptor>[
             _descriptor(id: 'm1', modelName: 'installed-model'),
@@ -145,6 +150,7 @@ void main() {
       ]);
       addTearDown(downloads.dispose);
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(
           initialModels: <ModelDescriptor>[
             _descriptor(id: 'm1', modelName: 'Gemma-2B'),
@@ -189,6 +195,7 @@ void main() {
       'does not suggest adding when an engine filter has no matches',
       (tester) async {
         final provider = ModelManagementProvider(
+          miniCpmRepository: _EmptyMiniCpmRepository(),
           repository: FakeLocalModelRepository(
             initialModels: <ModelDescriptor>[
               _descriptor(id: 'm1', modelName: 'installed-model'),
@@ -211,6 +218,7 @@ void main() {
 
     testWidgets('shows model cards with modelName and size', (tester) async {
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(
           initialModels: <ModelDescriptor>[
             _descriptor(id: 'm1', modelName: 'model', sizeBytes: 2147483648),
@@ -243,6 +251,7 @@ void main() {
       addTearDown(runtime.dispose);
 
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(
           initialModels: <ModelDescriptor>[
             _descriptor(id: 'm1', modelName: 'model'),
@@ -267,6 +276,7 @@ void main() {
 
     testWidgets('shows text badge when mmproj does not exist', (tester) async {
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(
           initialModels: <ModelDescriptor>[
             _descriptor(id: 'm1', modelName: 'text-only'),
@@ -286,6 +296,7 @@ void main() {
 
     testWidgets('shows multimodal badge when mmproj exists', (tester) async {
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(
           initialModels: <ModelDescriptor>[
             _descriptor(
@@ -309,6 +320,7 @@ void main() {
       tester,
     ) async {
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(
           initialModels: <ModelDescriptor>[
             _descriptor(id: 'm1', modelName: 'delete'),
@@ -340,6 +352,7 @@ void main() {
       tester,
     ) async {
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(
           initialModels: <ModelDescriptor>[
             _descriptor(id: 'm1', modelName: 'delete'),
@@ -364,6 +377,7 @@ void main() {
 
     testWidgets('imports model and shows snackbar feedback', (tester) async {
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(),
         filePicker: FakeGgufFilePicker(
           pickedFile: const PickedGgufFile(
@@ -391,6 +405,7 @@ void main() {
 
     testWidgets('renames model from settings sheet', (tester) async {
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(
           initialModels: <ModelDescriptor>[
             _descriptor(id: 'm1', modelName: 'before'),
@@ -441,6 +456,7 @@ void main() {
             },
           );
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(),
         filePicker: FakeGgufFilePicker(),
         logger: AppLogger(),
@@ -467,6 +483,7 @@ void main() {
 
     testWidgets('imports mmproj from settings sheet', (tester) async {
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(
           initialModels: <ModelDescriptor>[
             _descriptor(id: 'm1', modelName: 'vision'),
@@ -503,6 +520,7 @@ void main() {
       tester,
     ) async {
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(
           initialModels: <ModelDescriptor>[
             _descriptor(
@@ -542,6 +560,7 @@ void main() {
       tester,
     ) async {
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(
           initialModels: <ModelDescriptor>[
             _descriptor(id: 'm1', modelName: 'local'),
@@ -570,6 +589,7 @@ void main() {
       'shows the repository link while downloaded model vision is off',
       (tester) async {
         final provider = ModelManagementProvider(
+          miniCpmRepository: _EmptyMiniCpmRepository(),
           repository: FakeLocalModelRepository(
             initialModels: <ModelDescriptor>[
               _descriptor(
@@ -609,6 +629,7 @@ void main() {
       tester,
     ) async {
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(
           initialModels: <ModelDescriptor>[
             _descriptor(
@@ -661,6 +682,7 @@ void main() {
       addTearDown(discovery.dispose);
 
       final provider = ModelManagementProvider(
+        miniCpmRepository: _EmptyMiniCpmRepository(),
         repository: FakeLocalModelRepository(
           initialModels: <ModelDescriptor>[
             _descriptor(
@@ -1088,4 +1110,9 @@ class _FakeHubClient implements ModelHubClient {
       files: files,
     );
   }
+}
+
+class _EmptyMiniCpmRepository extends MiniCpmModelRepository {
+  @override
+  Future<List<MiniCpmModelDescriptor>> listModels() async => [];
 }
