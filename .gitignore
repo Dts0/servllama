@@ -173,3 +173,8 @@ android/app/src/main/jniLibs/**/*.so
 
 # Local sibling plugin resolution; release dependencies remain in pubspec.yaml.
 /pubspec_overrides.yaml
+
+# Vendored MNN wrapper source is tracked; rebuilt native outputs are not.
+/packages/mnn_engine/**/*.so
+/packages/mnn_engine/.cache/
+/packages/mnn_engine/third_party/MNN/

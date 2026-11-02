@@ -16,6 +16,10 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val llamaRuntimeManifest = rootProject.file("../assets/bin/llama_server_manifest.json")
+val llamaRuntime = JsonSlurper().parse(llamaRuntimeManifest) as Map<*, *>
+val llamaMinSdk = (llamaRuntime["minSdk"] as Number).toInt()
+
 android {
     namespace = "com.arkanefans.servllama"
     compileSdk = flutter.compileSdkVersion
@@ -35,7 +39,8 @@ android {
         applicationId = "com.arkanefans.servllama"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = 28
+        // Official CPU binaries target API 28; Snapdragon binaries target API 34.
+        minSdk = maxOf(28, llamaMinSdk)
         targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -46,8 +51,14 @@ android {
             // llama-server is executed as a child process, so the libraries
             // must exist as real files in nativeLibraryDir.
             useLegacyPackaging = true
-            // DSP kernels are Hexagon ELFs; the Android NDK must not strip them.
-            keepDebugSymbols += "**/libggml-htp-*.so"
+            // Preserve the checksum-pinned official runtime byte-for-byte.
+            // This also prevents the NDK from stripping Hexagon DSP ELFs.
+            keepDebugSymbols += setOf(
+                "**/libggml*.so", "**/libllama*.so", "**/libmtmd.so",
+                // MNN is stripped by its reproducible native packaging script.
+                // Do not change those manifest-pinned bytes during APK assembly.
+                "**/libMNN.so", "**/libmnn_engine_jni.so",
+            )
         }
         resources {
             excludes += setOf(
@@ -120,3 +131,33 @@ val verifySpeechNative by tasks.registering {
     }
 }
 tasks.named("preBuild").configure { dependsOn(verifySpeechNative) }
+
+val verifyLlamaNative by tasks.registering {
+    val directory = file("src/main/jniLibs/arm64-v8a")
+    inputs.file(llamaRuntimeManifest)
+    inputs.dir(directory)
+    doLast {
+        val metadata = JsonSlurper().parse(llamaRuntimeManifest) as Map<*, *>
+        val libraries = metadata["libraries"] as List<*>
+        check(libraries.isNotEmpty()) { "Prepare the pinned official llama.cpp runtime first." }
+        libraries.forEach { item ->
+            val record = item as Map<*, *>
+            val name = record["name"] as String
+            check(name.matches(Regex("lib[A-Za-z0-9_.-]+\\.so"))) { "Invalid native library name" }
+            val library = directory.resolve(name)
+            check(library.isFile) { "Missing $name; run tool/prepare_llama_runtime.py." }
+            val digest = MessageDigest.getInstance("SHA-256")
+            library.inputStream().use { stream ->
+                val buffer = ByteArray(1024 * 1024)
+                while (true) {
+                    val count = stream.read(buffer)
+                    if (count < 0) break
+                    digest.update(buffer, 0, count)
+                }
+            }
+            val actual = digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+            check(actual == record["sha256"]) { "$name differs from the official runtime manifest." }
+        }
+    }
+}
+tasks.named("preBuild").configure { dependsOn(verifyLlamaNative) }

@@ -1,0 +1,34 @@
+name: mnn_engine
+description: Run MNN LLMs on Android and expose an on-device OpenAI-compatible API server from Flutter.
+version: 0.2.0
+homepage: https://github.com/ArkaneFans/mnn_engine
+repository: https://github.com/ArkaneFans/mnn_engine
+issue_tracker: https://github.com/ArkaneFans/mnn_engine/issues
+
+topics:
+  - mnn
+  - llm
+  - on-device-ai
+  - openai-api
+  - flutter-plugin
+
+environment:
+  sdk: ^3.9.0
+  flutter: '>=3.35.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  plugin_platform_interface: ^2.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.arkanefans.mnn_engine
+        pluginClass: MnnEnginePlugin

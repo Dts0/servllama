@@ -1,0 +1,10 @@
+# Vendored wrapper source is tracked; downloaded upstream source and build outputs are not.
+/MNN/
+/.native/
+/.dart_tool/
+/build/
+/example/.dart_tool/
+/example/build/
+/android/.gradle/
+/android/src/main/jniLibs/**/*.so
+/pubspec.lock

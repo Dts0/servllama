@@ -1,0 +1,51 @@
+{
+  "archiveUrl": "https://github.com/alibaba/MNN/releases/download/3.6.2/mnn_3.6.2_android_armv7_armv8_cpu_opencl_vulkan.zip",
+  "archiveSha256": "0b4cc255964de1e3ac8dce75dce316699a0a28b914ecacb7bea8465666858ece",
+  "archiveBytes": 6746981,
+  "libraryEntry": "mnn_3.6.2_android_armv7_armv8_cpu_opencl_vulkan/arm64-v8a/libMNN.so",
+  "librarySha256": "f915474f37c6e04046eae2206ac9de0c1c336f648564f983a640e21021e1bb00",
+  "integrationSymbols": {
+    "mnn_engine_set_native_log_sink": false,
+    "mnn_engine_set_prefill_cancel_callback": false
+  },
+  "llmClassSymbols": false,
+  "reasonNotUsed": "Missing wrapper-required native log/prefill integration exports; rebuild official source preserving wrapper ABI8.",
+  "arm64Libraries": {
+    "libMNNAudio.so": {
+      "logBridgeExport": false,
+      "prefillCancellationExport": false
+    },
+    "libc++_shared.so": {
+      "logBridgeExport": false,
+      "prefillCancellationExport": false
+    },
+    "libMNN.so": {
+      "logBridgeExport": false,
+      "prefillCancellationExport": false
+    },
+    "libMNN_CL.so": {
+      "logBridgeExport": false,
+      "prefillCancellationExport": false
+    },
+    "libmnncore.so": {
+      "logBridgeExport": false,
+      "prefillCancellationExport": false
+    },
+    "libMNNOpenCV.so": {
+      "logBridgeExport": false,
+      "prefillCancellationExport": false
+    },
+    "libMNN_Vulkan.so": {
+      "logBridgeExport": false,
+      "prefillCancellationExport": false
+    },
+    "libllm.so": {
+      "logBridgeExport": false,
+      "prefillCancellationExport": false
+    },
+    "libMNN_Express.so": {
+      "logBridgeExport": false,
+      "prefillCancellationExport": false
+    }
+  }
+}

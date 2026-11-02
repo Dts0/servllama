@@ -1,7 +1,8 @@
 """Audit a built ServLlama APK, without installing it or loading native code.
 
-Checks ABI, ELF LOAD alignment, the pinned CrispASR hash and unchanged Hexagon
-DSP kernels. Signing, manifest version and device execution need separate checks.
+Checks ABI, ELF LOAD alignment, pinned speech/MNN and official llama.cpp hashes,
+runtime dependencies, the embedded manifest/license and unchanged Hexagon DSP
+kernels. Android manifest version, signing and device execution remain separate.
 """
 
 import argparse
@@ -12,10 +13,17 @@ import struct
 import sys
 import zipfile
 
+from prepare_llama_runtime import (
+    ANDROID_SYSTEM, BUILD, COMMIT, DSP_NAMES, VARIANTS, VERSION,
+    elf_metadata, runtime_library,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
-REQUIRED_DSP_NAMES = {f"libggml-htp-v{version}.so" for version in (73, 75, 79, 81)}
-REQUIRED = REQUIRED_DSP_NAMES | {
+MNN_VERSION = "3.6.2"
+MNN_COMMIT = "7e3c6fb5225d3ccf22807ee641332669df34650d"
+MNN_MANIFEST_ASSET = "packages/mnn_engine/native/android-arm64-v8a.json"
+REQUIRED = {
     "libflutter.so",
     "libllama-server.so",
     "libMNN.so",
@@ -67,11 +75,53 @@ def elf_loads(data):
     return machine, loads
 
 
-def audit(apk, manifest_path, jni_directory):
+def audit(apk, manifest_path, jni_directory, llama_manifest_path=None,
+          mnn_manifest_path=None):
     manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
     pinned = manifest["library"]
+    llama_manifest_path = llama_manifest_path or ROOT / "assets/bin/llama_server_manifest.json"
+    llama = json.loads(llama_manifest_path.read_text(encoding="utf-8"))
+    mnn_manifest_path = mnn_manifest_path or ROOT / MNN_MANIFEST_ASSET
+    mnn = json.loads(mnn_manifest_path.read_text(encoding="utf-8"))
+    mnn_records = mnn["libraries"]
+    variant = llama["variant"]
+    spec = VARIANTS[variant]
+    llama_records = {record["name"]: record for record in llama["libraries"]}
     errors, libraries = [], []
+    if (mnn["source"]["mnnVersion"] != MNN_VERSION or
+            mnn["source"]["mnnCommit"] != MNN_COMMIT or
+            mnn["target"]["abi"] != "arm64-v8a" or
+            mnn["target"]["minimumAndroidApi"] != 28 or
+            mnn["build"]["nativeAdapterAbiVersion"] != 8 or
+            set(mnn["runtime"]["compiledBackends"]) != {"cpu", "opencl", "vulkan"} or
+            mnn["runtime"]["vulkanMode"] != "buffer" or
+            mnn["runtime"]["hexagon"]["runtimePackaged"] is not False):
+        errors.append("MNN provenance/backends do not match the pinned 3.6.2 build")
+    if set(mnn_records) != {"libMNN.so", "libmnn_engine_jni.so"}:
+        errors.append("Unexpected MNN native library set")
+    if (llama["version"] != VERSION or llama["source"]["commit"] != COMMIT or
+            llama["source"]["tag"] != VERSION or llama["source"]["buildTag"] != BUILD or
+            llama["minSdk"] != spec["minSdk"] or
+            llama["artifact"]["sha256"] != spec["sha256"] or
+            llama["artifact"].get("unmodified") is not True):
+        errors.append("llama.cpp provenance does not match the pinned official release")
+    if set(llama_records) != spec["required"] or len(llama_records) != len(llama["libraries"]):
+        errors.append("Runtime manifest libraries do not match the selected official variant")
     with zipfile.ZipFile(apk) as archive:
+        try:
+            if json.loads(archive.read("assets/flutter_assets/" + MNN_MANIFEST_ASSET)) != mnn:
+                errors.append("Embedded MNN manifest differs from build manifest")
+        except (KeyError, ValueError) as error:
+            errors.append(f"Missing or invalid MNN manifest: {error}")
+        asset = "assets/flutter_assets/assets/bin/llama_server_manifest.json"
+        try:
+            if json.loads(archive.read(asset)) != llama:
+                errors.append("Embedded llama.cpp manifest differs from build manifest")
+            license_data = archive.read("assets/flutter_assets/" + llama["license"]["asset"])
+            if hashlib.sha256(license_data).hexdigest() != llama["license"]["sha256"]:
+                errors.append("Embedded llama.cpp license differs from official license")
+        except (KeyError, ValueError) as error:
+            errors.append(f"Missing or invalid llama.cpp manifest/license: {error}")
         entries = [entry for entry in archive.infolist()
                    if entry.filename.startswith("lib/") and not entry.is_dir()]
         names = [entry.filename for entry in entries]
@@ -80,9 +130,13 @@ def audit(apk, manifest_path, jni_directory):
             errors.append(f"Unexpected APK ABIs: {abis}")
         if len(names) != len(set(names)):
             errors.append("Duplicate native ZIP entries")
-        missing = REQUIRED - {name.split("/")[-1] for name in names}
+        packaged_names = {name.split("/")[-1] for name in names}
+        missing = (REQUIRED | spec["required"]) - packaged_names
         if missing:
             errors.append(f"Missing libraries: {sorted(missing)}")
+        extra_runtime = {name for name in packaged_names if runtime_library(name)} - spec["required"]
+        if extra_runtime:
+            errors.append(f"Unexpected/mixed llama.cpp libraries: {sorted(extra_runtime)}")
         for entry in entries:
             name = entry.filename.split("/")[-1]
             data = archive.read(entry)
@@ -110,11 +164,41 @@ def audit(apk, manifest_path, jni_directory):
                 if name == pinned["name"] and (
                         digest != pinned["sha256"] or len(data) != pinned["bytes"]):
                     errors.append(f"{name}: differs from pinned build manifest")
+                if name in mnn_records:
+                    expected = mnn_records[name]
+                    matches = digest == expected["sha256"] and len(data) == expected["sizeBytes"]
+                    record["mnn_source_matches"] = matches
+                    if not matches:
+                        errors.append(f"{name}: differs from pinned MNN build manifest")
+                    dynamic = elf_metadata(data)
+                    record["needed"] = dynamic["needed"]
+                    unresolved = set(dynamic["needed"]) - (set(mnn_records) | ANDROID_SYSTEM)
+                    if unresolved:
+                        errors.append(f"{name}: unresolved MNN dependencies: {sorted(unresolved)}")
+                if name in llama_records:
+                    expected = llama_records[name]
+                    matches = digest == expected["sha256"] and len(data) == expected["bytes"]
+                    record["official_source_matches"] = matches
+                    if not matches:
+                        errors.append(f"{name}: differs from unmodified official runtime")
+                    dynamic = elf_metadata(data)
+                    record["needed"] = dynamic["needed"]
+                    allowed = {"libc.so", "libgcc.so"} if name in DSP_NAMES else (
+                        spec["required"] | ANDROID_SYSTEM | spec["external"])
+                    unresolved = set(dynamic["needed"]) - allowed
+                    if unresolved:
+                        errors.append(f"{name}: unresolved dependencies: {sorted(unresolved)}")
             except (IndexError, ValueError, struct.error) as error:
                 errors.append(f"{name}: {error}")
             libraries.append(record)
     return {"apk": str(apk), "bytes": apk.stat().st_size,
             "sha256": sha256_file(apk), "abis": abis,
+            "llama_version": llama["version"], "llama_variant": variant,
+            "mnn_version": mnn["source"]["mnnVersion"],
+            "mnn_commit": mnn["source"]["mnnCommit"],
+            "mnn_backends": mnn["runtime"]["compiledBackends"],
+            "runtime_min_sdk": llama["minSdk"],
+            "external_dependencies": sorted(spec["external"]),
             "libraries": libraries, "errors": errors, "passed": not errors}
 
 
@@ -125,9 +209,14 @@ def main():
                         default=ROOT / "native/speech/android-arm64-v8a.json")
     parser.add_argument("--jni-dir", type=Path,
                         default=ROOT / "android/app/src/main/jniLibs/arm64-v8a")
+    parser.add_argument("--llama-manifest", type=Path,
+                        default=ROOT / "assets/bin/llama_server_manifest.json")
+    parser.add_argument("--mnn-manifest", type=Path,
+                        default=ROOT / MNN_MANIFEST_ASSET)
     args = parser.parse_args()
     try:
-        report = audit(args.apk, args.manifest, args.jni_dir)
+        report = audit(args.apk, args.manifest, args.jni_dir, args.llama_manifest,
+                       args.mnn_manifest)
     except (OSError, ValueError, KeyError, zipfile.BadZipFile) as error:
         parser.exit(2, f"Cannot audit APK: {error}\n")
     print(json.dumps(report, indent=2))

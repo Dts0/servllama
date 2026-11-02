@@ -60,7 +60,9 @@ dependencies:
   package_info_plus: ^9.0.1
   url_launcher: ^6.3.2
   flutter_foreground_task: ^9.2.2
-  mnn_engine: ^0.2.0
+  # Wrapper API 0.2.0, rebuilt against pinned upstream MNN 3.6.2.
+  mnn_engine:
+    path: packages/mnn_engine
   sherpa_onnx: 1.13.8
   crispasr: 0.8.37
   record: ^6.1.2
@@ -97,8 +99,10 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
+    - packages/mnn_engine/native/android-arm64-v8a.json
     - assets/licenses/crispasr-native.txt
     - assets/licenses/llvm-native.txt
+    - assets/licenses/llama-cpp-native.txt
     - assets/speech/catalog.json
     - assets/bin/llama_server_manifest.json
     - assets/catalog/model_catalog.json

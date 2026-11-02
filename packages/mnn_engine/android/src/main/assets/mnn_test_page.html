@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MNN API Test</title>
+  <style>
+    body { font-family: sans-serif; max-width: 900px; margin: 24px auto; padding: 0 16px; }
+    textarea, input { box-sizing: border-box; width: 100%; margin: 6px 0 12px; padding: 8px; }
+    textarea { min-height: 120px; }
+    button { margin: 4px 8px 4px 0; padding: 8px 14px; }
+    pre { min-height: 160px; padding: 12px; overflow: auto; background: #111; color: #eee; white-space: pre-wrap; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  </style>
+</head>
+<body>
+  <h1>MNN OpenAI API Test</h1>
+  <p>This page is served directly by the local MNN Engine foreground service.</p>
+  <label>Bearer token</label>
+  <input id="token" type="password" autocomplete="off">
+  <label>System prompt (optional)</label>
+  <textarea id="system" style="min-height:72px"></textarea>
+  <label>Prompt</label>
+  <textarea id="prompt">Hello! Briefly introduce yourself.</textarea>
+  <div class="row">
+    <div><label>temperature</label><input id="temperature" type="number" min="0" max="2" step="0.1" value="0.7"></div>
+    <div><label>top_p</label><input id="topP" type="number" min="0" max="1" step="0.1" value="0.9"></div>
+  </div>
+  <label>max_tokens</label>
+  <input id="maxTokens" type="number" min="1" max="8192" value="512">
+  <div class="row">
+    <button onclick="requestJson('/health')">GET /health</button>
+    <button onclick="requestJson('/v1/models')">GET /v1/models</button>
+  </div>
+  <button onclick="chat(false)">Non-stream chat</button>
+  <button onclick="chat(true)">Stream chat</button>
+  <button onclick="cancelChat()">Cancel chat</button>
+  <button onclick="output.textContent=''">Clear</button>
+  <pre id="output"></pre>
+  <script>
+    const output = document.getElementById('output');
+    const systemPrompt = document.getElementById('system');
+    const promptInput = document.getElementById('prompt');
+    const temperatureInput = document.getElementById('temperature');
+    const topPInput = document.getElementById('topP');
+    const maxTokensInput = document.getElementById('maxTokens');
+    let activeController = null;
+    const queryToken = new URLSearchParams(location.search).get('token');
+    if (queryToken) document.getElementById('token').value = queryToken;
+    function headers() {
+      const result = {'Content-Type': 'application/json'};
+      const token = document.getElementById('token').value;
+      if (token) result.Authorization = `Bearer ${token}`;
+      return result;
+    }
+    async function requestJson(path) {
+      const response = await fetch(path, {headers: headers()});
+      output.textContent = `${response.status}\n${await response.text()}`;
+    }
+    async function chat(stream) {
+      output.textContent = '';
+      if (activeController) activeController.abort();
+      activeController = new AbortController();
+      const started = performance.now();
+      const messages = [];
+      if (systemPrompt.value.trim()) messages.push({role: 'system', content: systemPrompt.value.trim()});
+      messages.push({role: 'user', content: promptInput.value});
+      try {
+        const response = await fetch('/v1/chat/completions', {
+          method: 'POST', headers: headers(), signal: activeController.signal,
+          body: JSON.stringify({
+            messages, stream,
+            temperature: Number(temperatureInput.value),
+            top_p: Number(topPInput.value),
+            max_tokens: Number(maxTokensInput.value)
+          })
+        });
+        if (!stream || !response.ok) {
+          output.textContent = `${response.status} · ${Math.round(performance.now() - started)}ms\n${await response.text()}`;
+          return;
+        }
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        while (true) {
+          const {value, done} = await reader.read();
+          if (done) break;
+          output.textContent += decoder.decode(value, {stream: true});
+        }
+        output.textContent += `\n\nCompleted in ${Math.round(performance.now() - started)}ms`;
+      } catch (error) {
+        output.textContent += `\n${error.name === 'AbortError' ? '[cancelled]' : error}`;
+      } finally {
+        activeController = null;
+      }
+    }
+    function cancelChat() {
+      if (activeController) activeController.abort();
+    }
+  </script>
+</body>
+</html>

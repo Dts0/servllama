@@ -12,6 +12,8 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   exclude:
     - native-cache/**
+    # The vendored plugin has its own analysis/test invocation and dependencies.
+    - packages/mnn_engine/**
 
 linter:
   # The lint rules applied to this project can be customized in the

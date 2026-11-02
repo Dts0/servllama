@@ -1,0 +1,41 @@
+package com.arkanefans.mnn_engine.model
+
+data class MnnModelInfo(
+    val modelId: String,
+    val modelKey: String,
+    val displayName: String,
+    val vendor: String?,
+    val modelDirPath: String,
+    val configPath: String,
+    val sizeBytes: Long,
+    val importedAt: Long,
+    val isActive: Boolean,
+    val supportsVision: Boolean = false,
+    val supportsToolCalling: Boolean = false,
+    val loadDurationMs: Long? = null,
+    val backend: String? = null,
+    val useMmap: Boolean? = null,
+    val precision: String? = null,
+    val threadNum: Int? = null,
+    val validationWarnings: List<String> = emptyList(),
+) {
+    fun toMap(): Map<String, Any?> = mapOf(
+        "modelId" to modelId,
+        "modelKey" to modelKey,
+        "displayName" to displayName,
+        "vendor" to vendor,
+        "modelDirPath" to modelDirPath,
+        "configPath" to configPath,
+        "sizeBytes" to sizeBytes,
+        "importedAt" to importedAt,
+        "isActive" to isActive,
+        "supportsVision" to supportsVision,
+        "supportsToolCalling" to supportsToolCalling,
+        "loadDurationMs" to loadDurationMs,
+        "backend" to backend,
+        "useMmap" to useMmap,
+        "precision" to precision,
+        "threadNum" to threadNum,
+        "validationWarnings" to validationWarnings,
+    )
+}

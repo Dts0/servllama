@@ -1,3 +1,537 @@
 {
-  "version": "v0.8.0"
+  "schemaVersion": 1,
+  "version": "v0.8.0",
+  "variant": "cpu",
+  "source": {
+    "repository": "https://github.com/ggml-org/llama.cpp",
+    "tag": "v0.8.0",
+    "buildTag": "b11960",
+    "commit": "8642541b255bfb5dc39cd351a178be09013a55d6"
+  },
+  "artifact": {
+    "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11960/llama-b11960-bin-android-arm64.tar.gz",
+    "sha256": "77d9f19fad41d6d8efbc29bcc1c1ab60a605018564cfc32203892eb1973ba4b9",
+    "unmodified": true
+  },
+  "abi": "arm64-v8a",
+  "minSdk": 28,
+  "backends": [
+    "cpu",
+    "rpc"
+  ],
+  "externalDependencies": [],
+  "license": {
+    "asset": "assets/licenses/llama-cpp-native.txt",
+    "sha256": "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d"
+  },
+  "libraries": [
+    {
+      "name": "libggml-base.so",
+      "sourcePath": "llama-b11960/libggml-base.so",
+      "bytes": 8201816,
+      "sha256": "b2795a6534b778fd7744fdcf1a6575dc179e44e1c0c2c2b7bba171aa71babc18",
+      "machine": 183,
+      "load_segments": [
+        {
+          "offset": 0,
+          "address": 0,
+          "alignment": 16384
+        },
+        {
+          "offset": 1030880,
+          "address": 1047264,
+          "alignment": 16384
+        },
+        {
+          "offset": 1057464,
+          "address": 1090232,
+          "alignment": 16384
+        }
+      ],
+      "needed": [
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ],
+      "androidApi": 28,
+      "ndkVersion": "r29",
+      "ndkBuild": "14206865"
+    },
+    {
+      "name": "libggml-cpu-android_armv8.0_1.so",
+      "sourcePath": "llama-b11960/libggml-cpu-android_armv8.0_1.so",
+      "bytes": 4768648,
+      "sha256": "8444a642f990b02d66fb44b624633775fa60501d01d8f6661cae89e10eb8730e",
+      "machine": 183,
+      "load_segments": [
+        {
+          "offset": 0,
+          "address": 0,
+          "alignment": 16384
+        },
+        {
+          "offset": 906544,
+          "address": 922928,
+          "alignment": 16384
+        },
+        {
+          "offset": 914376,
+          "address": 947144,
+          "alignment": 16384
+        }
+      ],
+      "needed": [
+        "libggml-base.so",
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ],
+      "androidApi": 28,
+      "ndkVersion": "r29",
+      "ndkBuild": "14206865"
+    },
+    {
+      "name": "libggml-cpu-android_armv8.2_1.so",
+      "sourcePath": "llama-b11960/libggml-cpu-android_armv8.2_1.so",
+      "bytes": 5061720,
+      "sha256": "2b5a90b6f380f6ebe65f72189818ae8a319bd070120b0c25b0891075801f9781",
+      "machine": 183,
+      "load_segments": [
+        {
+          "offset": 0,
+          "address": 0,
+          "alignment": 16384
+        },
+        {
+          "offset": 941184,
+          "address": 957568,
+          "alignment": 16384
+        },
+        {
+          "offset": 948776,
+          "address": 981544,
+          "alignment": 16384
+        }
+      ],
+      "needed": [
+        "libggml-base.so",
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ],
+      "androidApi": 28,
+      "ndkVersion": "r29",
+      "ndkBuild": "14206865"
+    },
+    {
+      "name": "libggml-cpu-android_armv8.2_2.so",
+      "sourcePath": "llama-b11960/libggml-cpu-android_armv8.2_2.so",
+      "bytes": 5046376,
+      "sha256": "98de274ec7dbf695488f04b4537d5d725bcc3a49ae12852240a0e979f4015a4c",
+      "machine": 183,
+      "load_segments": [
+        {
+          "offset": 0,
+          "address": 0,
+          "alignment": 16384
+        },
+        {
+          "offset": 944944,
+          "address": 961328,
+          "alignment": 16384
+        },
+        {
+          "offset": 952536,
+          "address": 985304,
+          "alignment": 16384
+        }
+      ],
+      "needed": [
+        "libggml-base.so",
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ],
+      "androidApi": 28,
+      "ndkVersion": "r29",
+      "ndkBuild": "14206865"
+    },
+    {
+      "name": "libggml-cpu-android_armv8.6_1.so",
+      "sourcePath": "llama-b11960/libggml-cpu-android_armv8.6_1.so",
+      "bytes": 5156592,
+      "sha256": "cd169184e34efa1b28c1f2dd33b636bf31b133b1f1f16498563458b41cfabe5f",
+      "machine": 183,
+      "load_segments": [
+        {
+          "offset": 0,
+          "address": 0,
+          "alignment": 16384
+        },
+        {
+          "offset": 956576,
+          "address": 972960,
+          "alignment": 16384
+        },
+        {
+          "offset": 964112,
+          "address": 996880,
+          "alignment": 16384
+        }
+      ],
+      "needed": [
+        "libggml-base.so",
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ],
+      "androidApi": 28,
+      "ndkVersion": "r29",
+      "ndkBuild": "14206865"
+    },
+    {
+      "name": "libggml-cpu-android_armv9.0_1.so",
+      "sourcePath": "llama-b11960/libggml-cpu-android_armv9.0_1.so",
+      "bytes": 5196640,
+      "sha256": "a759c7ca00d2dd54fe07cb9d2d613ab1896369854966f08d525196fb69d08af1",
+      "machine": 183,
+      "load_segments": [
+        {
+          "offset": 0,
+          "address": 0,
+          "alignment": 16384
+        },
+        {
+          "offset": 958976,
+          "address": 975360,
+          "alignment": 16384
+        },
+        {
+          "offset": 966512,
+          "address": 999280,
+          "alignment": 16384
+        }
+      ],
+      "needed": [
+        "libggml-base.so",
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ],
+      "androidApi": 28,
+      "ndkVersion": "r29",
+      "ndkBuild": "14206865"
+    },
+    {
+      "name": "libggml-cpu-android_armv9.2_1.so",
+      "sourcePath": "llama-b11960/libggml-cpu-android_armv9.2_1.so",
+      "bytes": 5196640,
+      "sha256": "718857c50cf135f2dd6bcb9eb41f1604180c502f245ce5da9d8033918abaa572",
+      "machine": 183,
+      "load_segments": [
+        {
+          "offset": 0,
+          "address": 0,
+          "alignment": 16384
+        },
+        {
+          "offset": 958976,
+          "address": 975360,
+          "alignment": 16384
+        },
+        {
+          "offset": 966512,
+          "address": 999280,
+          "alignment": 16384
+        }
+      ],
+      "needed": [
+        "libggml-base.so",
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ],
+      "androidApi": 28,
+      "ndkVersion": "r29",
+      "ndkBuild": "14206865"
+    },
+    {
+      "name": "libggml-cpu-android_armv9.2_2.so",
+      "sourcePath": "llama-b11960/libggml-cpu-android_armv9.2_2.so",
+      "bytes": 5196640,
+      "sha256": "4666637a356bb1bcdbb5aa48e59fe0fcbe7df5602e77ec4c82b33cbaad6d4123",
+      "machine": 183,
+      "load_segments": [
+        {
+          "offset": 0,
+          "address": 0,
+          "alignment": 16384
+        },
+        {
+          "offset": 958976,
+          "address": 975360,
+          "alignment": 16384
+        },
+        {
+          "offset": 966512,
+          "address": 999280,
+          "alignment": 16384
+        }
+      ],
+      "needed": [
+        "libggml-base.so",
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ],
+      "androidApi": 28,
+      "ndkVersion": "r29",
+      "ndkBuild": "14206865"
+    },
+    {
+      "name": "libggml-rpc.so",
+      "sourcePath": "llama-b11960/libggml-rpc.so",
+      "bytes": 7143072,
+      "sha256": "a71faf8c9acc46a33d6ff2e750afddc6f2a01b29b8b6efa3f50e299cbeb2908e",
+      "machine": 183,
+      "load_segments": [
+        {
+          "offset": 0,
+          "address": 0,
+          "alignment": 16384
+        },
+        {
+          "offset": 809840,
+          "address": 826224,
+          "alignment": 16384
+        },
+        {
+          "offset": 832136,
+          "address": 864904,
+          "alignment": 16384
+        }
+      ],
+      "needed": [
+        "libggml-base.so",
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ],
+      "androidApi": 28,
+      "ndkVersion": "r29",
+      "ndkBuild": "14206865"
+    },
+    {
+      "name": "libggml.so",
+      "sourcePath": "llama-b11960/libggml.so",
+      "bytes": 4930232,
+      "sha256": "d9455751e05d2be8d01f3275d0fd8fb3e2d22fa088884dc1d60fbec3daedcbf1",
+      "machine": 183,
+      "load_segments": [
+        {
+          "offset": 0,
+          "address": 0,
+          "alignment": 16384
+        },
+        {
+          "offset": 645472,
+          "address": 661856,
+          "alignment": 16384
+        },
+        {
+          "offset": 663848,
+          "address": 696616,
+          "alignment": 16384
+        }
+      ],
+      "needed": [
+        "libggml-base.so",
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ],
+      "androidApi": 28,
+      "ndkVersion": "r29",
+      "ndkBuild": "14206865"
+    },
+    {
+      "name": "libllama-common.so",
+      "sourcePath": "llama-b11960/libllama-common.so",
+      "bytes": 89089928,
+      "sha256": "d6b86c8619df58f3195bc0ca8b77f2bd12073e7b1e9d253190710cbfcf336c36",
+      "machine": 183,
+      "load_segments": [
+        {
+          "offset": 0,
+          "address": 0,
+          "alignment": 16384
+        },
+        {
+          "offset": 5938864,
+          "address": 5955248,
+          "alignment": 16384
+        },
+        {
+          "offset": 6098864,
+          "address": 6131632,
+          "alignment": 16384
+        }
+      ],
+      "needed": [
+        "libllama.so",
+        "libggml.so",
+        "libggml-base.so",
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ],
+      "androidApi": 28,
+      "ndkVersion": "r29",
+      "ndkBuild": "14206865"
+    },
+    {
+      "name": "libllama-server-impl.so",
+      "sourcePath": "llama-b11960/libllama-server-impl.so",
+      "bytes": 68278176,
+      "sha256": "6da8944d6a56e7df6100375af6badd1a6a016fd794c44e6955f5881b5138d834",
+      "machine": 183,
+      "load_segments": [
+        {
+          "offset": 0,
+          "address": 0,
+          "alignment": 16384
+        },
+        {
+          "offset": 8043776,
+          "address": 8060160,
+          "alignment": 16384
+        },
+        {
+          "offset": 8171888,
+          "address": 8204656,
+          "alignment": 16384
+        }
+      ],
+      "needed": [
+        "libllama-common.so",
+        "libmtmd.so",
+        "libllama.so",
+        "libggml.so",
+        "libggml-base.so",
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ],
+      "androidApi": 28,
+      "ndkVersion": "r29",
+      "ndkBuild": "14206865"
+    },
+    {
+      "name": "libllama-server.so",
+      "sourcePath": "llama-b11960/llama-server",
+      "bytes": 7192,
+      "sha256": "db82377125f69e87c06b402bba1af072e2a4c4cc9945946e4d6378cc213a84d7",
+      "machine": 183,
+      "load_segments": [
+        {
+          "offset": 0,
+          "address": 0,
+          "alignment": 16384
+        },
+        {
+          "offset": 1952,
+          "address": 18336,
+          "alignment": 16384
+        },
+        {
+          "offset": 2480,
+          "address": 35248,
+          "alignment": 16384
+        }
+      ],
+      "needed": [
+        "libllama-server-impl.so",
+        "libllama-common.so",
+        "libmtmd.so",
+        "libllama.so",
+        "libggml.so",
+        "libggml-base.so",
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ],
+      "androidApi": 28,
+      "ndkVersion": "r29",
+      "ndkBuild": "14206865"
+    },
+    {
+      "name": "libllama.so",
+      "sourcePath": "llama-b11960/libllama.so",
+      "bytes": 38856464,
+      "sha256": "f316c70c8835e4737bf8f43f40e187023ec24ee43e81cc99ca3f583aea9ce68b",
+      "machine": 183,
+      "load_segments": [
+        {
+          "offset": 0,
+          "address": 0,
+          "alignment": 16384
+        },
+        {
+          "offset": 3801968,
+          "address": 3818352,
+          "alignment": 16384
+        },
+        {
+          "offset": 3887040,
+          "address": 3919808,
+          "alignment": 16384
+        }
+      ],
+      "needed": [
+        "libggml.so",
+        "libggml-base.so",
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ],
+      "androidApi": 28,
+      "ndkVersion": "r29",
+      "ndkBuild": "14206865"
+    },
+    {
+      "name": "libmtmd.so",
+      "sourcePath": "llama-b11960/libmtmd.so",
+      "bytes": 20758128,
+      "sha256": "87cbd37736ac6e6ace2588282a6d953e0c80f66ce8b0821a7d6575d9ba54ef70",
+      "machine": 183,
+      "load_segments": [
+        {
+          "offset": 0,
+          "address": 0,
+          "alignment": 16384
+        },
+        {
+          "offset": 1591072,
+          "address": 1607456,
+          "alignment": 16384
+        },
+        {
+          "offset": 1610256,
+          "address": 1643024,
+          "alignment": 16384
+        }
+      ],
+      "needed": [
+        "libllama.so",
+        "libggml.so",
+        "libggml-base.so",
+        "libm.so",
+        "libdl.so",
+        "libc.so"
+      ],
+      "androidApi": 28,
+      "ndkVersion": "r29",
+      "ndkBuild": "14206865"
+    }
+  ]
 }

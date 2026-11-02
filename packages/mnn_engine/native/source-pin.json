@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "wrapper": {
+    "name": "mnn_engine",
+    "version": "0.2.0",
+    "archiveUrl": "https://pub.dev/api/archives/mnn_engine-0.2.0.tar.gz",
+    "archiveSha256": "aaeb9ae14c4d7b8669a6a017e25d85a0248ee1e73751a7378a28ae9f803ca977"
+  },
+  "upstream": {
+    "repository": "https://github.com/alibaba/MNN.git",
+    "version": "3.6.2",
+    "tag": "3.6.2",
+    "tagObject": "498882a2781b4a0385e3dcd0042c751cf8708143",
+    "commit": "7e3c6fb5225d3ccf22807ee641332669df34650d",
+    "releaseUrl": "https://github.com/alibaba/MNN/releases/tag/3.6.2"
+  },
+  "integration": {
+    "nativeAdapterAbiVersion": 8,
+    "buildCopyPatches": [
+      "scripts/cmake/mnn_log_bridge.cmake",
+      "scripts/cmake/mnn_tokenizer_compat.cmake",
+      "scripts/cmake/mnn_prefill_compat.cmake"
+    ],
+    "backends": [
+      "cpu",
+      "opencl",
+      "vulkan"
+    ],
+    "vulkanMode": "buffer",
+    "hexagon": false,
+    "qnn": false
+  },
+  "toolchain": {
+    "minimumAndroidApi": 28,
+    "ndkVersion": "27.0.12077973",
+    "cmakeVersion": "3.22.1"
+  }
+}

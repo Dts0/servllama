@@ -1,0 +1,190 @@
+group = "com.arkanefans.mnn_engine"
+
+def pubspecText = file("../pubspec.yaml").getText("UTF-8")
+def pubspecVersionMatcher = pubspecText =~ /(?m)^version:\s*([^\s]+)\s*$/
+if (!pubspecVersionMatcher.find()) {
+    throw new GradleException("Unable to read the mnn_engine version from pubspec.yaml.")
+}
+def mnnEngineVersion = pubspecVersionMatcher.group(1)
+version = mnnEngineVersion
+
+buildscript {
+    ext.kotlin_version = "2.1.0"
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath("com.android.tools.build:gradle:8.9.1")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version")
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+apply plugin: "com.android.library"
+apply plugin: "kotlin-android"
+
+def bundledNativeDir = file("src/main/jniLibs/arm64-v8a")
+def bundledMnnLibrary = file("${bundledNativeDir}/libMNN.so")
+def bundledJniLibrary = file("${bundledNativeDir}/libmnn_engine_jni.so")
+def nativeManifest = file("../native/android-arm64-v8a.json")
+def hexagonAssets = file("src/main/assets/mnn/hexagon")
+
+tasks.register("verifyBundledMnnNativeArtifacts") {
+    inputs.files(bundledMnnLibrary, bundledJniLibrary, nativeManifest)
+    inputs.files(fileTree(hexagonAssets), fileTree(bundledNativeDir))
+    doLast {
+        def missingArtifacts = [bundledMnnLibrary, bundledJniLibrary].findAll {
+            !it.isFile() || it.length() == 0
+        }
+        if (!missingArtifacts.isEmpty()) {
+            throw new GradleException(
+                "mnn_engine is missing its bundled Android arm64 native libraries: " +
+                    missingArtifacts.collect { it.absolutePath }.join(", ")
+            )
+        }
+        def manifest = new groovy.json.JsonSlurper().parse(nativeManifest)
+        if ((manifest.build.nativeAdapterAbiVersion as int) < 8) {
+            throw new GradleException("mnn_engine needs native adapter ABI 8. Rebuild and package the native libraries.")
+        }
+        if (!manifest.build.cmakeFlags.contains("MNN_ENGINE_LOG_BRIDGE=ON")) {
+            throw new GradleException("mnn_engine requires the native MNN log bridge. Rebuild and package the native libraries.")
+        }
+        if (!manifest.build.cmakeFlags.contains("MNN_ENGINE_PREFILL_CANCELLATION=ON")) {
+            throw new GradleException("mnn_engine requires prefill cancellation support. Rebuild and package the native libraries.")
+        }
+        def checkHash = { File artifact, String expected ->
+            if (!artifact.isFile() || java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(artifact.bytes).encodeHex().toString() != expected) {
+                throw new GradleException("mnn_engine artifact checksum mismatch: ${artifact}")
+            }
+        }
+        manifest.libraries.each { name, info ->
+            if (!(name in ["libMNN.so", "libmnn_engine_jni.so", "libMNN_htpops.so"])) {
+                throw new GradleException("Unexpected native artifact: ${name}")
+            }
+            checkHash(file("${bundledNativeDir}/${name}"), info.sha256)
+        }
+        def hexagon = manifest.runtime.hexagon
+        if (hexagon.runtimePackaged) {
+            checkHash(file("${hexagonAssets}/manifest.json"), hexagon.assetManifestSha256)
+            def bundle = new groovy.json.JsonSlurper().parse(file("${hexagonAssets}/manifest.json"))
+            def architectures = hexagon.dspArchitectures
+            if (!(architectures instanceof List) || architectures.isEmpty() ||
+                    architectures.toSet().size() != architectures.size() ||
+                    !["v73", "v75", "v79", "v81"].containsAll(architectures) ||
+                    bundle.schemaVersion != 2 || bundle.stubAbiVersion != 1 || hexagon.stubAbiVersion != 1 ||
+                    bundle.mnnCommit != manifest.source.mnnCommit ||
+                    bundle.stubSha256 != manifest.libraries["libMNN_htpops.so"]?.sha256 ||
+                    bundle.architectures.keySet() != architectures.toSet()) {
+                throw new GradleException("Incompatible Hexagon architecture manifest. Re-package the native libraries.")
+            }
+            def expectedAssets = [:]
+            architectures.each { arch ->
+                def files = bundle.architectures[arch].files
+                if (files.keySet() != ["libMNN_htpops_skel.so", "libc++.so.1", "libc++abi.so.1"].toSet()) {
+                    throw new GradleException("Incomplete Hexagon runtime for ${arch}.")
+                }
+                files.each { name, info -> expectedAssets["${arch}/${name}".toString()] = info }
+            }
+            if (hexagon.assets != expectedAssets) {
+                throw new GradleException("Native and Hexagon asset manifests disagree.")
+            }
+            def actualFiles = fileTree(hexagonAssets).files.collect {
+                hexagonAssets.toPath().relativize(it.toPath()).toString().replace('\\', '/')
+            }.toSet()
+            if (actualFiles != (["manifest.json"] + expectedAssets.keySet().toList()).toSet()) {
+                throw new GradleException("Unexpected or missing Hexagon assets. Re-package the native libraries.")
+            }
+            expectedAssets.each { name, info ->
+                def artifact = file("${hexagonAssets}/${name}")
+                checkHash(artifact, info.sha256)
+                if (artifact.length() != info.sizeBytes) {
+                    throw new GradleException("Hexagon asset size mismatch: ${artifact}")
+                }
+            }
+        } else if (file("${bundledNativeDir}/libMNN_htpops.so").exists() || hexagonAssets.exists()) {
+            throw new GradleException("Untracked Hexagon runtime files found. Re-run scripts/package_mnn_artifacts.sh.")
+        }
+    }
+}
+
+dependencies {
+    implementation("androidx.documentfile:documentfile:1.0.1")
+    implementation("androidx.core:core-ktx:1.15.0")
+    implementation("com.google.code.gson:gson:2.11.0")
+    implementation("io.ktor:ktor-server-core:3.1.3")
+    implementation("io.ktor:ktor-server-cio:3.1.3")
+    implementation("io.ktor:ktor-server-call-logging:3.1.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.1")
+}
+
+android {
+    namespace = "com.arkanefans.mnn_engine"
+
+    compileSdk = 35
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_11
+    }
+
+    sourceSets {
+        main.java.srcDirs += "src/main/kotlin"
+        test.java.srcDirs += "src/test/kotlin"
+    }
+
+    defaultConfig {
+        minSdk = 28
+        buildConfigField "String", "MNN_ENGINE_VERSION", "\"${mnnEngineVersion}\""
+        consumerProguardFiles "consumer-rules.pro"
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    dependencies {
+        testImplementation("org.jetbrains.kotlin:kotlin-test")
+        testImplementation("org.mockito:mockito-core:5.0.0")
+    }
+
+    testOptions {
+        unitTests.all {
+            useJUnitPlatform()
+
+            // Mockito's inline mocks need instrumentation. Load its existing
+            // transitive agent at test-VM startup instead of self-attaching,
+            // which is unavailable in some CI/container environments. This
+            // affects unit tests only, not Android runtime or APK packaging.
+            doFirst {
+                def agent = classpath.files.find {
+                    it.name ==~ /(?:jetified-)?byte-buddy-agent-.+\.jar/
+                }
+                if (agent == null) throw new GradleException("Missing Mockito Byte Buddy test agent.")
+                jvmArgs "-javaagent:${agent.absolutePath}"
+            }
+
+            testLogging {
+               events "passed", "skipped", "failed", "standardOut", "standardError"
+               outputs.upToDateWhen {false}
+               showStandardStreams = true
+            }
+        }
+    }
+}
+
+tasks.named("preBuild").configure {
+    dependsOn("verifyBundledMnnNativeArtifacts")
+}
