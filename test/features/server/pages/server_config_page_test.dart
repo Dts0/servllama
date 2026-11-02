@@ -30,6 +30,43 @@ void main() {
       SharedPreferences.setMockInitialValues(<String, Object>{});
     });
 
+    testWidgets('MiniCPM exposes LES controls without official GPU selection', (
+      tester,
+    ) async {
+      final settings = _FixedServerLaunchSettingsLoader(
+        const ServerLaunchSettings(contextSize: 262144),
+      );
+      final config = ServerConfigProvider(
+        settingsLoader: settings,
+        llamaCppDeviceProbeService: LlamaCppDeviceProbeService(
+          resultOverride: () => LlamaCppDeviceProbeResult.cpuOnly,
+        ),
+      );
+      final runtime = EngineRuntimeProvider(
+        llamaCppAdapter: StubEngineAdapter(engine: InferenceEngine.llamaCpp),
+        mnnAdapter: StubEngineAdapter(),
+        miniCpmAdapter: StubEngineAdapter(engine: InferenceEngine.miniCpm),
+        settingsLoader: settings,
+        kvStorage: KvStorage(),
+      );
+      addTearDown(config.dispose);
+      addTearDown(runtime.dispose);
+      await runtime.ensureRestored();
+      await runtime.switchEngine(InferenceEngine.miniCpm);
+      await config.load();
+      await tester.pumpWidget(
+        _TestApp(
+          serverProvider: runtime,
+          child: ServerConfigPage(provider: config),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('MiniCPM / LES'), findsOneWidget);
+      expect(config.contextSize, 262144);
+      expect(find.textContaining('CPU'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('shows loading first and then renders loaded slider value', (
       tester,
     ) async {

@@ -12,6 +12,7 @@ import 'package:servllama/core/models/inference_engine.dart';
 import 'package:servllama/core/services/engines/inference_engine_adapter.dart';
 import 'package:servllama/core/services/engines/llama_cpp_engine_adapter.dart';
 import 'package:servllama/core/services/engines/mnn_engine_adapter.dart';
+import 'package:servllama/core/services/engines/mini_cpm_engine_adapter.dart';
 import 'package:servllama/core/services/server_launch_settings_loader.dart';
 import 'package:servllama/core/storage/engine_prefs_keys.dart';
 import 'package:servllama/core/storage/kv_storage.dart';
@@ -28,6 +29,7 @@ class EngineRuntimeProvider extends ChangeNotifier {
   EngineRuntimeProvider({
     InferenceEngineAdapter? llamaCppAdapter,
     InferenceEngineAdapter? mnnAdapter,
+    InferenceEngineAdapter? miniCpmAdapter,
     ServerLaunchSettingsLoader? settingsLoader,
     KvStorage? kvStorage,
     AppLogger? logger,
@@ -44,6 +46,9 @@ class EngineRuntimeProvider extends ChangeNotifier {
           LlamaCppEngineAdapter(settingsLoader: _settingsLoader),
       InferenceEngine.mnn:
           mnnAdapter ?? MnnEngineAdapter(settingsLoader: _settingsLoader),
+      InferenceEngine.miniCpm:
+          miniCpmAdapter ??
+          MiniCpmEngineAdapter(settingsLoader: _settingsLoader),
     };
     for (final adapter in _adapters.values) {
       _runningSubscriptions.add(

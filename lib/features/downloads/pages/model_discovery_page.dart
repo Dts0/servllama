@@ -1,3 +1,4 @@
+import 'package:servllama/features/downloads/pages/mini_cpm_bundle_page.dart';
 import 'package:servllama/shared/widgets/app_tab_bar.dart';
 import 'package:servllama/shared/widgets/app_scaffold.dart';
 import 'package:servllama/shared/widgets/ai_identity_icon.dart';
@@ -72,8 +73,9 @@ class _ModelDiscoveryPageState extends State<ModelDiscoveryPage>
   ) async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            HubRepoPage(repoId: repoId, source: source, engine: engine),
+        builder: (_) => engine == InferenceEngine.miniCpm
+            ? const MiniCpmBundlePage()
+            : HubRepoPage(repoId: repoId, source: source, engine: engine),
       ),
     );
   }
@@ -172,6 +174,7 @@ class _FeaturedTabState extends State<_FeaturedTab>
       'all': l.modelLibraryFilterAll,
       if (!speechOnly) 'llamaCpp': 'llama.cpp',
       if (!speechOnly) 'mnn': 'MNN',
+      if (!speechOnly) 'miniCpm': 'MiniCPM LES',
       if (purpose != 'llm') 'sherpa_onnx': 'sherpa-onnx',
       if (purpose != 'llm') 'crispasr': 'CrispASR',
     };

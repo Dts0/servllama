@@ -1,3 +1,5 @@
+import 'package:servllama/core/repositories/mini_cpm_model_repository.dart';
+import 'package:servllama/core/models/mini_cpm_bundle.dart';
 import 'package:servllama/core/database/model_selection_cleanup.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -16,11 +18,14 @@ import 'package:servllama/core/repositories/local_model_repository.dart';
 class UnifiedModelRepository {
   UnifiedModelRepository({
     LocalModelRepository? localModelRepository,
+    MiniCpmModelRepository? miniCpmModelRepository,
     MnnEngine? mnnEngine,
     AppLogger? logger,
     AppDatabase? database,
   }) : _localModelRepository =
            localModelRepository ?? LocalModelRepository(database: database),
+       _miniCpmModelRepository =
+           miniCpmModelRepository ?? MiniCpmModelRepository(database: database),
        _mnnEngine = mnnEngine ?? MnnEngine.instance,
        _logger = logger ?? AppLogger.instance,
        database = database ?? AppDatabase.current;
@@ -29,6 +34,7 @@ class UnifiedModelRepository {
   static const String _mnnIdPrefix = 'mnn:';
 
   final LocalModelRepository _localModelRepository;
+  final MiniCpmModelRepository _miniCpmModelRepository;
   final MnnEngine _mnnEngine;
   final AppLogger _logger;
   final AppDatabase? database;
@@ -38,7 +44,7 @@ class UnifiedModelRepository {
     if (reconcile) {
       for (final m in await listModels()) {
         // LocalModelRepository commits GGUF details and asset metadata together.
-        if (m.engine == InferenceEngine.llamaCpp) continue;
+        if (m.engine != InferenceEngine.mnn) continue;
         final found = await db.query(
           'SELECT id FROM model_assets WHERE kind=? AND engine=? AND path=?',
           ['llm', m.engine.storageValue, m.storagePath],
@@ -129,6 +135,8 @@ class UnifiedModelRepository {
         return '$_ggufIdPrefix$rawId';
       case InferenceEngine.mnn:
         return '$_mnnIdPrefix$rawId';
+      case InferenceEngine.miniCpm:
+        return 'minicpm:$rawId';
     }
   }
 
@@ -139,9 +147,13 @@ class UnifiedModelRepository {
 
   Future<List<LibraryModel>> listModels() async {
     final results = await Future.wait<List<LibraryModel>>(
-      <Future<List<LibraryModel>>>[_listGgufModels(), _listMnnModels()],
+      <Future<List<LibraryModel>>>[
+        _listGgufModels(),
+        _listMnnModels(),
+        _listMiniCpmModels(),
+      ],
     );
-    final models = <LibraryModel>[...results[0], ...results[1]];
+    final models = <LibraryModel>[...results[0], ...results[1], ...results[2]];
     models.sort((left, right) => right.importedAt.compareTo(left.importedAt));
     return models;
   }
@@ -152,6 +164,8 @@ class UnifiedModelRepository {
         return _listGgufModels();
       case InferenceEngine.mnn:
         return _listMnnModels();
+      case InferenceEngine.miniCpm:
+        return _listMiniCpmModels();
     }
   }
 
@@ -159,6 +173,9 @@ class UnifiedModelRepository {
     switch (model.engine) {
       case InferenceEngine.llamaCpp:
         await _localModelRepository.deleteModel(rawIdOf(model.id));
+        return;
+      case InferenceEngine.miniCpm:
+        await _miniCpmModelRepository.deleteModel(rawIdOf(model.id));
         return;
       case InferenceEngine.mnn:
         await _mnnEngine.deleteImportedModel(rawIdOf(model.id));
@@ -200,6 +217,13 @@ class UnifiedModelRepository {
         );
         await _renamedAsset(model, result);
         return result;
+      case InferenceEngine.miniCpm:
+        return _libraryModelFromMiniCpm(
+          await _miniCpmModelRepository.renameModel(
+            rawIdOf(model.id),
+            trimmedName,
+          ),
+        );
       case InferenceEngine.mnn:
         final renamed = await _mnnEngine.renameImportedModel(
           model.runtimeId,
@@ -240,7 +264,10 @@ class UnifiedModelRepository {
       return true;
     }
     final normalized = trimmedName.toLowerCase();
-    final mnnModels = await _listMnnModels();
+    final mnnModels = [
+      ...await _listMnnModels(),
+      ...await _listMiniCpmModels(),
+    ];
     return mnnModels.any(
       (model) =>
           model.id != excludingLibraryId &&
@@ -271,6 +298,25 @@ class UnifiedModelRepository {
         )
         .toList(growable: false);
   }
+
+  Future<List<LibraryModel>> _listMiniCpmModels() async =>
+      (await _miniCpmModelRepository.listModels())
+          .map(_libraryModelFromMiniCpm)
+          .toList();
+
+  LibraryModel _libraryModelFromMiniCpm(MiniCpmModelDescriptor m) =>
+      LibraryModel(
+        id: libraryIdFor(InferenceEngine.miniCpm, m.id),
+        runtimeId: m.id,
+        engine: InferenceEngine.miniCpm,
+        name: m.modelName,
+        sizeBytes: m.sizeBytes,
+        importedAt: m.importedAt,
+        storagePath: m.storedDirectoryPath,
+        hasMmproj: true,
+        supportsVision: m.activeMmprojFilePath != null,
+        warnings: const ['Experimental MiniCPM LES CPU backend'],
+      );
 
   Future<List<LibraryModel>> _listMnnModels() async {
     try {

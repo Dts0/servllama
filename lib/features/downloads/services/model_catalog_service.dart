@@ -56,9 +56,8 @@ class CatalogEntry {
   String? repoIdFor(ModelHubSource source) => sources[source];
 }
 
-/// Loads the bundled curated catalog. These entries are the ones that have
-/// been run on real devices, which is what makes the "featured" tab safe to
-/// recommend from, unlike raw hub search results.
+/// Loads the curated catalog. Experimental entries are explicitly labelled;
+/// their inclusion does not imply real-device validation.
 class ModelCatalogService {
   ModelCatalogService({AssetBundle? assetBundle}) : _assetBundle = assetBundle;
 
@@ -77,7 +76,9 @@ class ModelCatalogService {
     final raw = await bundle.loadString(assetPath);
     final decoded = jsonDecode(raw);
     if (decoded is! Map || decoded['entries'] is! List) {
-      throw const FormatException('model catalog must be a JSON object with entries');
+      throw const FormatException(
+        'model catalog must be a JSON object with entries',
+      );
     }
 
     final entries = <CatalogEntry>[];

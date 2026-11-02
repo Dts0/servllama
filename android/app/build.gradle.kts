@@ -19,6 +19,8 @@ plugins {
 val llamaRuntimeManifest = rootProject.file("../assets/bin/llama_server_manifest.json")
 val llamaRuntime = JsonSlurper().parse(llamaRuntimeManifest) as Map<*, *>
 val llamaMinSdk = (llamaRuntime["minSdk"] as Number).toInt()
+// Opt-in parallel test package: preserves installations signed with a different key.
+val miniCpmExperimental = providers.gradleProperty("miniCpmExperimental").orNull == "true"
 
 android {
     namespace = "com.arkanefans.servllama"
@@ -37,6 +39,12 @@ android {
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.arkanefans.servllama"
+        if (miniCpmExperimental) applicationIdSuffix = ".minicpmexperimental"
+        manifestPlaceholders["appLabel"] = if (miniCpmExperimental) {
+            "ServLlama MiniCPM（实验）"
+        } else {
+            "ServLlama"
+        }
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         // Official CPU binaries target API 28; Snapdragon binaries target API 34.
@@ -58,6 +66,7 @@ android {
                 // MNN is stripped by its reproducible native packaging script.
                 // Do not change those manifest-pinned bytes during APK assembly.
                 "**/libMNN.so", "**/libmnn_engine_jni.so",
+                "**/libminicpm-server.so",
             )
         }
         resources {
@@ -161,3 +170,34 @@ val verifyLlamaNative by tasks.registering {
     }
 }
 tasks.named("preBuild").configure { dependsOn(verifyLlamaNative) }
+
+val verifyMiniCpmNative by tasks.registering {
+    val manifest = rootProject.file("../assets/bin/minicpm_server_manifest.json")
+    val library = file("src/main/jniLibs/arm64-v8a/libminicpm-server.so")
+    inputs.files(manifest, library)
+    doLast {
+        check(manifest.isFile && library.isFile) {
+            "Build the pinned MiniCPM runtime before packaging (native/minicpm/README.md)."
+        }
+        val metadata = JsonSlurper().parse(manifest) as Map<*, *>
+        check(metadata["abi"] == "arm64-v8a") { "MiniCPM runtime ABI mismatch" }
+        val libraries = metadata["libraries"] as List<*>
+        check(libraries.size == 1) { "MiniCPM must package one isolated executable" }
+        val record = libraries.single() as Map<*, *>
+        check(record["name"] == "libminicpm-server.so") { "Unexpected MiniCPM library" }
+        val digest = MessageDigest.getInstance("SHA-256")
+        library.inputStream().use { stream ->
+            val buffer = ByteArray(1024 * 1024)
+            while (true) {
+                val count = stream.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        val actual = digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
+        check(actual == record["sha256"] && library.length() == (record["bytes"] as Number).toLong()) {
+            "MiniCPM executable and build manifest disagree"
+        }
+    }
+}
+tasks.named("preBuild").configure { dependsOn(verifyMiniCpmNative) }

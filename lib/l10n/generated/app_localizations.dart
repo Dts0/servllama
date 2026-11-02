@@ -6148,6 +6148,120 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'What’s on your mind today?'**
   String get chatWelcomeDescription;
+
+  /// No description provided for @miniCpmCpuNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'MiniCPM / LES uses CPU inference. Model files and runtime are isolated from llama.cpp and MNN. Larger context, batches, parallel slots and expert caches use more memory.'**
+  String get miniCpmCpuNotice;
+
+  /// No description provided for @miniCpmSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'MiniCPM / LES settings'**
+  String get miniCpmSettings;
+
+  /// No description provided for @miniCpmMicroBatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Physical micro-batch'**
+  String get miniCpmMicroBatch;
+
+  /// No description provided for @miniCpmMicroBatchDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Passed to --ubatch-size. Lower values reduce prefill memory.'**
+  String get miniCpmMicroBatchDescription;
+
+  /// No description provided for @miniCpmSlotBank.
+  ///
+  /// In en, this message translates to:
+  /// **'Expert slot bank'**
+  String get miniCpmSlotBank;
+
+  /// No description provided for @miniCpmSlotBankDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Passed to --moe-slot-bank. The backend validates model-specific requirements.'**
+  String get miniCpmSlotBankDescription;
+
+  /// No description provided for @miniCpmCacheWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'Expert decode cache window'**
+  String get miniCpmCacheWindow;
+
+  /// No description provided for @miniCpmCacheWindowDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'0 disables this cache. This is not the prompt token / KV cache.'**
+  String get miniCpmCacheWindowDescription;
+
+  /// No description provided for @miniCpmReasoning.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow model reasoning'**
+  String get miniCpmReasoning;
+
+  /// No description provided for @miniCpmReasoningDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto follows the model template; off disables supported reasoning templates.'**
+  String get miniCpmReasoningDescription;
+
+  /// No description provided for @catalogSummaryExperimentalMiniCpmLes.
+  ///
+  /// In en, this message translates to:
+  /// **'Experimental CPU LES bundle: requires about 16.6 GB storage. Memory and speed depend on settings and device.'**
+  String get catalogSummaryExperimentalMiniCpmLes;
+
+  /// No description provided for @miniCpmDownloadQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Download queued'**
+  String get miniCpmDownloadQueued;
+
+  /// No description provided for @miniCpmDownloadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not queue download. Check the queue and free storage.'**
+  String get miniCpmDownloadFailed;
+
+  /// No description provided for @miniCpmCatalogUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Model catalog unavailable'**
+  String get miniCpmCatalogUnavailable;
+
+  /// No description provided for @miniCpmBundleWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Experimental CPU backend. SSD expert offload does not guarantee a 3 GB memory footprint. Memory and speed depend on your device and settings.'**
+  String get miniCpmBundleWarning;
+
+  /// No description provided for @miniCpmBundleVerification.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloads the model, projector, expert manifest and every shard. SHA-256 is verified before use. Downloads can resume.'**
+  String get miniCpmBundleVerification;
+
+  /// No description provided for @miniCpmDownloadBundle.
+  ///
+  /// In en, this message translates to:
+  /// **'Download complete bundle'**
+  String get miniCpmDownloadBundle;
+
+  /// No description provided for @miniCpmImportDirectory.
+  ///
+  /// In en, this message translates to:
+  /// **'MiniCPM LES complete bundle directory'**
+  String get miniCpmImportDirectory;
+
+  /// No description provided for @miniCpmImportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'MiniCPM LES import failed. Check bundle completeness, matching files and free storage.'**
+  String get miniCpmImportFailed;
 }
 
 class _AppLocalizationsDelegate

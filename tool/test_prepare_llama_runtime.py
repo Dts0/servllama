@@ -66,7 +66,7 @@ class RuntimeTest(unittest.TestCase):
         return manifest
 
     def make_apk(self, variant="cpu", mutate=None, extra=None, mnn_version=None,
-                 mnn_embedded=True, mnn_dependency=None):
+                 mnn_embedded=True, mnn_dependency=None, mini_embedded=True):
         manifest = self.prepare(variant)
         jni = self.root / "android/app/src/main/jniLibs/arm64-v8a"
         speech = elf()
@@ -89,6 +89,15 @@ class RuntimeTest(unittest.TestCase):
                           for name in ("libMNN.so", "libmnn_engine_jni.so")},
         }
         mnn_manifest.write_text(json.dumps(mnn))
+        mini_license = b"MiniCPM test license\n"
+        mini = {
+            "abi": "arm64-v8a",
+            "libraries": [{"name": "libminicpm-server.so", "bytes": len(speech),
+                           "sha256": hashlib.sha256(speech).hexdigest()}],
+            "license": {"asset": "assets/licenses/minicpm-native.txt",
+                        "sha256": hashlib.sha256(mini_license).hexdigest()},
+        }
+        (self.root / "assets/bin/minicpm_server_manifest.json").write_text(json.dumps(mini))
         apk = self.root / "test.apk"
         with zipfile.ZipFile(apk, "w") as archive:
             for name in sorted(bundle.REQUIRED | runtime.VARIANTS[variant]["required"]):
@@ -104,11 +113,27 @@ class RuntimeTest(unittest.TestCase):
                              json.dumps(manifest))
             archive.writestr("assets/flutter_assets/assets/licenses/llama-cpp-native.txt",
                              (self.root / "assets/licenses/llama-cpp-native.txt").read_bytes())
+            if mini_embedded:
+                archive.writestr("assets/flutter_assets/assets/bin/minicpm_server_manifest.json",
+                                 json.dumps(mini))
+                archive.writestr("assets/flutter_assets/assets/licenses/minicpm-native.txt",
+                                 mini_license)
             if mnn_embedded:
                 archive.writestr("assets/flutter_assets/" + bundle.MNN_MANIFEST_ASSET,
                                  json.dumps(mnn))
-        return bundle.audit(apk, speech_manifest, jni,
-                            self.root / "assets/bin/llama_server_manifest.json", mnn_manifest)
+        with patch.object(bundle, "ROOT", self.root):
+            return bundle.audit(apk, speech_manifest, jni,
+                                self.root / "assets/bin/llama_server_manifest.json", mnn_manifest)
+
+    def test_audit_requires_minicpm_manifest_asset(self):
+        report = self.make_apk(mini_embedded=False)
+        self.assertFalse(report["passed"])
+        self.assertTrue(any("Missing or invalid MiniCPM manifest" in x for x in report["errors"]))
+
+    def test_audit_rejects_modified_minicpm_bytes(self):
+        report = self.make_apk(mutate="libminicpm-server.so")
+        self.assertFalse(report["passed"])
+        self.assertTrue(any("pinned MiniCPM manifest" in x for x in report["errors"]))
 
     def test_checksum_mismatch_writes_nothing(self):
         with self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):

@@ -118,6 +118,7 @@ void main() {
       kvStorage: KvStorage(),
       llamaCppAdapter: StubEngineAdapter(engine: InferenceEngine.llamaCpp),
       mnnAdapter: StubEngineAdapter(),
+      miniCpmAdapter: StubEngineAdapter(engine: InferenceEngine.miniCpm),
     );
     final sessions = ChatSessionRepository(
       database: speech.db,
@@ -256,6 +257,10 @@ void main() {
         );
         expect(
           find.byKey(const Key('chat_engine_start_option_llama_cpp')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('chat_engine_start_option_mini_cpm')),
           findsOneWidget,
         );
         // Dismissing the sheet does not start a service or change the chat.

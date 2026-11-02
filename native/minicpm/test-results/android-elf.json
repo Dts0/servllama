@@ -1,0 +1,19 @@
+{
+  "sha256": "8740d7c52706cfda8c224e44623785c9260e2d3ee56d62ae06372245e46a05cc",
+  "bytes": 9059528,
+  "needed": [
+    "libm.so",
+    "libdl.so",
+    "libc.so"
+  ],
+  "loadSegments": [
+    "LOAD           0x000000 0x0000000000000000 0x0000000000000000 0x87df30 0x87df30 R E 0x4000",
+    "LOAD           0x87df30 0x0000000000881f30 0x0000000000881f30 0x024520 0x0260d0 RW  0x4000",
+    "LOAD           0x8a2450 0x00000000008aa450 0x00000000008aa450 0x000fd8 0x09c2b0 RW  0x4000"
+  ],
+  "ndk": "27.0.12077973",
+  "cmake": "4.4.0",
+  "cpuArch": "armv8-a",
+  "minApi": 28,
+  "androidRuntimeTested": false
+}

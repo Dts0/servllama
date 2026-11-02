@@ -15,7 +15,7 @@
         android:maxSdkVersion="28" />
     
     <application
-        android:label="ServLlama"
+        android:label="${appLabel}"
         android:allowBackup="false"
         android:usesCleartextTraffic="true"
         android:name="${applicationName}"

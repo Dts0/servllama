@@ -1,0 +1,5 @@
+capacity 4096 slots 1
+models 1
+{"repeat": 0, "elapsed": 2.7304426829996373, "usage": {"completion_tokens": 10, "prompt_tokens": 18, "total_tokens": 28, "prompt_tokens_details": {"cached_tokens": 0}}, "timings": {"cache_n": 0, "prompt_n": 18, "prompt_ms": 1381.366, "prompt_per_token_ms": 76.74255555555555, "prompt_per_second": 13.030579875282871, "predicted_n": 10, "predicted_ms": 1336.863, "predicted_per_token_ms": 133.68630000000002, "predicted_per_second": 7.4801980457234585}}
+{"repeat": 1, "elapsed": 1.3052888069996698, "usage": {"completion_tokens": 10, "prompt_tokens": 18, "total_tokens": 28, "prompt_tokens_details": {"cached_tokens": 14}}, "timings": {"cache_n": 14, "prompt_n": 4, "prompt_ms": 230.983, "prompt_per_token_ms": 57.74575, "prompt_per_second": 17.317291748743415, "predicted_n": 10, "predicted_ms": 1061.497, "predicted_per_token_ms": 106.14970000000001, "predicted_per_second": 9.42065780685202}}
+disconnect and subsequent request passed

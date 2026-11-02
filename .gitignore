@@ -178,3 +178,9 @@ android/app/src/main/jniLibs/**/*.so
 /packages/mnn_engine/**/*.so
 /packages/mnn_engine/.cache/
 /packages/mnn_engine/third_party/MNN/
+
+# Local pinned MiniCPM native sources and build products
+/.minicpm-build/
+
+# Kotlin compiler local session cache.
+/android/.kotlin/

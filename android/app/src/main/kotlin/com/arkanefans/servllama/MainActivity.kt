@@ -2,6 +2,7 @@ package com.arkanefans.servllama
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import io.flutter.embedding.android.FlutterActivity
@@ -10,6 +11,12 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    private var miniCpmImporter: MiniCpmImporter? = null
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (miniCpmImporter?.onActivityResult(requestCode, resultCode, data) == true) return
+        super.onActivityResult(requestCode, resultCode, data)
+    }
     override fun provideFlutterEngine(context: Context): FlutterEngine = AppHost.engine(context)
     override fun shouldDestroyEngineWithHost(): Boolean = false
 
@@ -21,6 +28,10 @@ class MainActivity : FlutterActivity() {
         pendingExportSourcePath = null
         pendingExportFileName = null
         pendingExportMimeType = null
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
+            "com.arkanefans.servllama/minicpm_import").setMethodCallHandler(null)
+        miniCpmImporter?.detach()
+        miniCpmImporter = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 
@@ -30,6 +41,11 @@ class MainActivity : FlutterActivity() {
     private var pendingExportMimeType: String? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        miniCpmImporter = MiniCpmImporter(this)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
+            "com.arkanefans.servllama/minicpm_import").setMethodCallHandler { call, result ->
+            miniCpmImporter?.handle(call, result)
+        }
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "com.arkanefans.servllama/file_export",

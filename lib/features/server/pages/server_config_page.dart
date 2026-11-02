@@ -118,6 +118,72 @@ class _ServerConfigViewState extends State<_ServerConfigView> {
                             const LlamaCppBackendSettings(),
                             const SizedBox(height: 18),
                           ],
+                          if (activeEngine == InferenceEngine.miniCpm) ...[
+                            NoticeBanner(message: l10n.miniCpmCpuNotice),
+                            const SizedBox(height: 18),
+                            SettingsSection(
+                              title: l10n.miniCpmSettings,
+                              child: SettingsTileList(
+                                children: [
+                                  OutlinedTextSetting(
+                                    label: l10n.miniCpmMicroBatch,
+                                    description:
+                                        l10n.miniCpmMicroBatchDescription,
+                                    value: '${provider.miniCpmMicroBatch}',
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                    onChanged: (value) {
+                                      final n = int.tryParse(value);
+                                      if (n != null) {
+                                        provider.updateMiniCpmMicroBatch(n);
+                                      }
+                                    },
+                                  ),
+                                  OutlinedTextSetting(
+                                    label: l10n.miniCpmSlotBank,
+                                    description:
+                                        l10n.miniCpmSlotBankDescription,
+                                    value: '${provider.miniCpmSlotBank}',
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                    onChanged: (value) {
+                                      final n = int.tryParse(value);
+                                      if (n != null) {
+                                        provider.updateMiniCpmSlotBank(n);
+                                      }
+                                    },
+                                  ),
+                                  OutlinedTextSetting(
+                                    label: l10n.miniCpmCacheWindow,
+                                    description:
+                                        l10n.miniCpmCacheWindowDescription,
+                                    value: '${provider.miniCpmCacheWindow}',
+                                    keyboardType: TextInputType.number,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                    ],
+                                    onChanged: (value) {
+                                      final n = int.tryParse(value);
+                                      if (n != null) {
+                                        provider.updateMiniCpmCacheWindow(n);
+                                      }
+                                    },
+                                  ),
+                                  SwitchSettingTile(
+                                    title: l10n.miniCpmReasoning,
+                                    subtitle: l10n.miniCpmReasoningDescription,
+                                    value: provider.miniCpmReasoning,
+                                    onChanged: provider.updateMiniCpmReasoning,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                          ],
                           SettingsSection(
                             title: l10n.serverConfigSectionNetwork,
                             child: SettingsTileList(
@@ -186,7 +252,7 @@ class _ServerConfigViewState extends State<_ServerConfigView> {
                             const SizedBox(height: 18),
                             const MnnRuntimeSettings(),
                           ],
-                          if (activeEngine == InferenceEngine.llamaCpp) ...[
+                          if (activeEngine.isLlamaFamily) ...[
                             const SizedBox(height: 18),
                             SettingsSection(
                               title: l10n.serverConfigSectionInference,

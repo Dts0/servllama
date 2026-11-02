@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:servllama/core/models/inference_engine.dart';
 import 'package:servllama/core/providers/engine_runtime_provider.dart';
 import 'package:servllama/features/chat/models/chat_context_usage.dart';
 import 'package:servllama/features/chat/providers/chat_provider.dart';
@@ -76,7 +75,7 @@ class _ChatContextIndicatorState extends State<ChatContextIndicator> {
     final asset = p.targetAsset;
     if (r == null ||
         !r.isRunning ||
-        r.activeEngine != InferenceEngine.llamaCpp ||
+        !r.activeEngine.isLlamaFamily ||
         p.currentTarget?.isRemote != false ||
         asset == null ||
         asset.runtimeId != r.activeModelId ||

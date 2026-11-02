@@ -24,6 +24,10 @@ class ServerLaunchSettings {
     this.logLevel = defaultLogLevel,
     this.llamaCppBackend = defaultLlamaCppBackend,
     this.llamaCppGpuLayers = defaultLlamaCppGpuLayers,
+    this.miniCpmMicroBatch = 32,
+    this.miniCpmSlotBank = 256,
+    this.miniCpmCacheWindow = 0,
+    this.miniCpmReasoning = true,
     this.mnnBackend = MnnBackend.cpu,
     this.mnnUseMmap = defaultMnnUseMmap,
     this.mnnPrecision = defaultMnnPrecision,
@@ -99,6 +103,10 @@ class ServerLaunchSettings {
   final ServerLogLevel logLevel;
   final LlamaCppBackend llamaCppBackend;
   final int llamaCppGpuLayers;
+  final int miniCpmMicroBatch;
+  final int miniCpmSlotBank;
+  final int miniCpmCacheWindow;
+  final bool miniCpmReasoning;
   final MnnBackend mnnBackend;
   final bool mnnUseMmap;
   final MnnPrecision mnnPrecision;
@@ -122,6 +130,10 @@ class ServerLaunchSettings {
     ServerLogLevel? logLevel,
     LlamaCppBackend? llamaCppBackend,
     int? llamaCppGpuLayers,
+    int? miniCpmMicroBatch,
+    int? miniCpmSlotBank,
+    int? miniCpmCacheWindow,
+    bool? miniCpmReasoning,
     MnnBackend? mnnBackend,
     bool? mnnUseMmap,
     MnnPrecision? mnnPrecision,
@@ -142,6 +154,10 @@ class ServerLaunchSettings {
       logLevel: logLevel ?? this.logLevel,
       llamaCppBackend: llamaCppBackend ?? this.llamaCppBackend,
       llamaCppGpuLayers: llamaCppGpuLayers ?? this.llamaCppGpuLayers,
+      miniCpmMicroBatch: miniCpmMicroBatch ?? this.miniCpmMicroBatch,
+      miniCpmSlotBank: miniCpmSlotBank ?? this.miniCpmSlotBank,
+      miniCpmCacheWindow: miniCpmCacheWindow ?? this.miniCpmCacheWindow,
+      miniCpmReasoning: miniCpmReasoning ?? this.miniCpmReasoning,
       mnnBackend: mnnBackend ?? this.mnnBackend,
       mnnUseMmap: mnnUseMmap ?? this.mnnUseMmap,
       mnnPrecision: mnnPrecision ?? this.mnnPrecision,

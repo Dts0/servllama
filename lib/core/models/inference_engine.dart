@@ -2,7 +2,8 @@
 /// (design decision D1) and the active one owns the configured port.
 enum InferenceEngine {
   llamaCpp,
-  mnn;
+  mnn,
+  miniCpm;
 
   static InferenceEngine fromStorageValue(String? value) {
     for (final engine in InferenceEngine.values) {
@@ -19,10 +20,12 @@ enum InferenceEngine {
         return 'llama_cpp';
       case InferenceEngine.mnn:
         return 'mnn';
+      case InferenceEngine.miniCpm:
+        return 'mini_cpm';
     }
   }
 
-  /// Engine name as shown to users. Both are product names, so they are the
+  /// Engine name as shown to users. These are product names, so they are the
   /// same in every locale and intentionally live outside the ARB files.
   String get displayName {
     switch (this) {
@@ -30,9 +33,13 @@ enum InferenceEngine {
         return 'llama.cpp';
       case InferenceEngine.mnn:
         return 'MNN';
+      case InferenceEngine.miniCpm:
+        return 'MiniCPM / LES';
     }
   }
 
-  /// Model container shape: GGUF ships as a single file, MNN as a directory.
-  bool get usesDirectoryModels => this == InferenceEngine.mnn;
+  /// Model container shape: GGUF ships as a single file, MNN and LES as directories.
+  bool get usesDirectoryModels => this != InferenceEngine.llamaCpp;
+
+  bool get isLlamaFamily => this != InferenceEngine.mnn;
 }

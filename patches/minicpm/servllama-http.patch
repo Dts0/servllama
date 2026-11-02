@@ -1,0 +1,481 @@
+diff --git a/common/arg.cpp b/common/arg.cpp
+index 047b18b..776a1fc 100644
+--- a/common/arg.cpp
++++ b/common/arg.cpp
+@@ -2266,6 +2266,19 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
+             params.use_direct_io = value;
+         }
+     ).set_env("LLAMA_ARG_DIO"));
++    add_opt(common_arg(
++        {"--moe-cache-window"}, "N",
++        "resident decoded expert cache entries per layer (0 disables; extra RAM)",
++        [](common_params &, int value) {
++            if (value < 0) throw std::invalid_argument("moe-cache-window must be nonnegative");
++            const std::string text = std::to_string(value);
++#ifdef _WIN32
++            _putenv_s("LLAMA_MOE_DECODE_WINDOW", text.c_str());
++#else
++            setenv("LLAMA_MOE_DECODE_WINDOW", text.c_str(), 1);
++#endif
++        }
++    ));
+     add_opt(common_arg(
+         {"--moe-experts"}, "PATH",
+         "expert-major routed MoE experts directory or manifest",
+diff --git a/common/chat-parser.cpp b/common/chat-parser.cpp
+index ff83102..42a713e 100644
+--- a/common/chat-parser.cpp
++++ b/common/chat-parser.cpp
+@@ -438,7 +438,6 @@ std::optional<common_chat_msg_parser::consume_json_result> common_chat_msg_parse
+         }
+     }
+ 
+-    LOG_DBG("Parsed partial JSON: %s (json_healing_marker: %s)\n", partial->json.dump().c_str(), partial->healing_marker.json_dump_marker.c_str());
+ 
+     auto found_healing_marker = false;
+     std::vector<std::string> path;
+@@ -522,7 +521,6 @@ std::optional<common_chat_msg_parser::consume_json_result> common_chat_msg_parse
+     };
+ 
+     auto cleaned = remove_unsupported_healings_and_dump_args(partial->json);
+-    LOG_DBG("Cleaned up JSON %s to %s (json_healing_marker : '%s')\n", partial->json.dump().c_str(), cleaned.dump().c_str(), partial->healing_marker.json_dump_marker.c_str());
+     return consume_json_result {
+         cleaned,
+         /* .is_partial = */ found_healing_marker,
+diff --git a/common/chat.cpp b/common/chat.cpp
+index ef15169..752737b 100644
+--- a/common/chat.cpp
++++ b/common/chat.cpp
+@@ -801,7 +801,6 @@ common_reasoning_format common_reasoning_format_from_name(const std::string & fo
+ static void foreach_function(const json & tools, const std::function<void(const json &)> & fn) {
+     for (const auto & tool : tools) {
+         if (!tool.contains("type") || tool.at("type") != "function" || !tool.contains("function")) {
+-            LOG_INF("Skipping tool without function: %s", tool.dump(2).c_str());
+             continue;
+         }
+         fn(tool);
+@@ -2465,7 +2464,6 @@ static common_chat_params common_chat_templates_apply_jinja(const struct common_
+         }
+         common_peg_arena arena;
+         arena.load(auto_params.parser);
+-        LOG_DBG("%s: generated parser:\n%s\n\nparser generation prompt: %s\n", __func__, arena.dump(arena.root()).c_str(), auto_params.generation_prompt.c_str());
+         return auto_params;
+     } catch (const std::exception & e) {
+         throw std::invalid_argument(std::string("Unable to generate parser for this template. Automatic parser generation failed: ") + e.what());
+@@ -2619,7 +2617,6 @@ common_chat_msg common_chat_peg_parse(const common_peg_arena &          src_pars
+     }
+ 
+     if (!is_partial) {
+-        LOG_DBG("Parsed message: %s\n", common_chat_msgs_to_json_oaicompat({ msg }).at(0).dump().c_str());
+     }
+     return msg;
+ }
+diff --git a/ggml/src/ggml-cpu/ggml-cpu.cpp b/ggml/src/ggml-cpu/ggml-cpu.cpp
+index 128883b..8114cf1 100644
+--- a/ggml/src/ggml-cpu/ggml-cpu.cpp
++++ b/ggml/src/ggml-cpu/ggml-cpu.cpp
+@@ -639,7 +639,30 @@ static ggml_backend_feature * ggml_backend_cpu_get_features(ggml_backend_reg_t r
+     GGML_UNUSED(reg);
+ }
+ 
++// Experimental host-test adapter: ordinary writable CPU allocation with a
++// distinct buffer-type identity, so expert slots never wrap the model mmap.
++static const char * ggml_backend_cpu_alloc_only_name(ggml_backend_buffer_type_t) {
++    return "CPU_Expert_Alloc";
++}
++
++static ggml_backend_buffer_type_t ggml_backend_cpu_buffer_type_alloc_only(size_t device) {
++    if (device != 0) {
++        return nullptr;
++    }
++    static ggml_backend_buffer_type type = [] {
++        ggml_backend_buffer_type t = *ggml_backend_cpu_buffer_type();
++        t.iface.get_name = ggml_backend_cpu_alloc_only_name;
++        t.device = ggml_backend_reg_dev_get(ggml_backend_cpu_reg(), 0);
++        return t;
++    }();
++    return &type;
++}
++
+ static void * ggml_backend_cpu_get_proc_address(ggml_backend_reg_t reg, const char * name) {
++    if (strcmp(name, "ggml_backend_dev_buffer_type_alloc_only") == 0) {
++        return (void *)ggml_backend_cpu_buffer_type_alloc_only;
++    }
++
+     if (strcmp(name, "ggml_backend_set_n_threads") == 0) {
+         ggml_backend_set_n_threads_t fct = ggml_backend_cpu_set_n_threads;
+         return (void *)fct;
+diff --git a/src/llama-model.cpp b/src/llama-model.cpp
+index f896b83..a1b955a 100644
+--- a/src/llama-model.cpp
++++ b/src/llama-model.cpp
+@@ -1308,6 +1308,11 @@ bool llama_model_base::load_tensors(llama_model_loader & ml) {
+         throw std::runtime_error(format("%s: no CPU backend found", __func__));
+     }
+ 
++    // Experimental CPU expert-slot adapter (the upstream hook is GPU-only).
++    if (ggml_backend_buffer_type_t buft = make_alloc_only_buft(cpu_dev)) {
++        pimpl->alloc_only_buft.emplace(cpu_dev, buft);
++    }
++
+     // calculate the split points
+     bool all_zero = tensor_split == nullptr || std::all_of(tensor_split, tensor_split + n_devices(), [](float x) { return x == 0.0f; });
+     std::vector<float> splits(n_devices());
+@@ -1708,7 +1713,7 @@ ggml_tensor * llama_model_base::create_tensor_own_alloc(llama_model_loader & ml,
+     // 所以这个改动对现有路径是透明的。
+     ggml_backend_dev_t dev = tn.bid == -1
+         ? nullptr
+-        : ggml_backend_buft_get_device(pimpl->dev_layer.at(tn.bid).buft_list->front().second);
++        : pimpl->dev_layer.at(tn.bid).dev;
+ 
+     // 诊断开关：退回「和非专家权重共用一个 buffer」的旧行为，用于 A/B。
+     static const bool disabled = [] {
+@@ -1738,7 +1743,7 @@ ggml_tensor * llama_model_base::create_expert_tensor_from_manifest(llama_model_l
+     // 的文件映射包住（见 create_tensor_own_alloc 的说明）。
+     ggml_backend_dev_t dev = tn.bid == -1
+         ? nullptr
+-        : ggml_backend_buft_get_device(pimpl->dev_layer.at(tn.bid).buft_list->front().second);
++        : pimpl->dev_layer.at(tn.bid).dev;
+ 
+     const auto it = dev ? pimpl->alloc_only_buft.find(dev) : pimpl->alloc_only_buft.end();
+     if (it == pimpl->alloc_only_buft.end()) {
+diff --git a/src/llama-moe-slot.cpp b/src/llama-moe-slot.cpp
+index 28c7666..49b3750 100644
+--- a/src/llama-moe-slot.cpp
++++ b/src/llama-moe-slot.cpp
+@@ -1345,7 +1345,7 @@ struct llama_moe_slot_runtime::impl {
+ 
+     /// 把已打开的 experts fd 的 F_NOCACHE 拨到 `on`。只改缓存行为，不动数据。
+     void apply_experts_nocache(bool on) {
+-#ifndef _WIN32
++#ifdef F_NOCACHE
+         std::lock_guard<std::mutex> lock(fd_mutex);
+         for (const auto & kv : fds) {
+             if (fcntl(kv.second, F_NOCACHE, on ? 1 : 0) != 0) {
+@@ -1353,6 +1353,8 @@ struct llama_moe_slot_runtime::impl {
+             }
+         }
+ #endif
++
++#ifdef F_NOCACHE
+         // 只在每个方向各打一次，避免长会话刷屏。
+         static bool logged[2] = { false, false };
+         if (!logged[on ? 0 : 1]) {
+@@ -1360,6 +1362,7 @@ struct llama_moe_slot_runtime::impl {
+             moe_log("experts 读%s page cache（%s 阶段）", on ? "绕过" : "经过",
+                     on ? "prefill" : "decode");
+         }
++#endif
+     }
+ 
+     int fd_for(const std::string & path) {
+@@ -1372,9 +1375,12 @@ struct llama_moe_slot_runtime::impl {
+         const int fd = _open(path.c_str(), _O_RDONLY | _O_BINARY);
+ #else
+         const int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
+-        if (experts_nocache_desired() && fcntl(fd, F_NOCACHE, 1) != 0) {
++
++#ifdef F_NOCACHE
++        if (fd >= 0 && experts_nocache_desired() && fcntl(fd, F_NOCACHE, 1) != 0) {
+             moe_log("F_NOCACHE 设置失败: %s", std::strerror(errno));
+         }
++#endif
+ #endif
+         if (fd < 0) {
+             throw std::runtime_error(format("failed to open MoE experts file '%s': %s", path.c_str(), std::strerror(errno)));
+diff --git a/tools/omni/omni-impl.h b/tools/omni/omni-impl.h
+index 03d7f81..96b4d00 100644
+--- a/tools/omni/omni-impl.h
++++ b/tools/omni/omni-impl.h
+@@ -158,7 +158,7 @@ struct omni_logger_state {
+     void * log_callback_user_data;
+ };
+ 
+-extern struct omni_logger_state g_logger_state;
++extern struct omni_logger_state omni_g_logger_state;
+ 
+ static void omni_log_internal_v(enum ggml_log_level level, const char * format, va_list args) {
+     if (format == NULL) {
+@@ -169,12 +169,12 @@ static void omni_log_internal_v(enum ggml_log_level level, const char * format,
+     char buffer[128];
+     int len = vsnprintf(buffer, 128, format, args);
+     if (len < 128) {
+-        g_logger_state.log_callback(level, buffer, g_logger_state.log_callback_user_data);
++        omni_g_logger_state.log_callback(level, buffer, omni_g_logger_state.log_callback_user_data);
+     } else {
+         char * buffer2 = (char *) calloc(len + 1, sizeof(char));
+         vsnprintf(buffer2, len + 1, format, args_copy);
+         buffer2[len] = 0;
+-        g_logger_state.log_callback(level, buffer2, g_logger_state.log_callback_user_data);
++        omni_g_logger_state.log_callback(level, buffer2, omni_g_logger_state.log_callback_user_data);
+         free(buffer2);
+     }
+     va_end(args_copy);
+@@ -189,7 +189,7 @@ static void omni_log_internal(enum ggml_log_level level, const char * format, ..
+ 
+ #define LOG_TMPL(level, ...) \
+     do { \
+-        if ((level) >= g_logger_state.verbosity_thold) { \
++        if ((level) >= omni_g_logger_state.verbosity_thold) { \
+             omni_log_internal((level), __VA_ARGS__); \
+         } \
+     } while (0)
+diff --git a/tools/omni/vision.cpp b/tools/omni/vision.cpp
+index 2d2a002..28b9bbd 100644
+--- a/tools/omni/vision.cpp
++++ b/tools/omni/vision.cpp
+@@ -30,7 +30,7 @@
+ #include <functional>
+ 
+ 
+-struct omni_logger_state g_logger_state = {GGML_LOG_LEVEL_CONT, omni_log_callback_default, NULL};
++struct omni_logger_state omni_g_logger_state = {GGML_LOG_LEVEL_CONT, omni_log_callback_default, NULL};
+ 
+ enum ffn_op_type {
+     FFN_GELU,
+@@ -1610,7 +1610,7 @@ struct vision_model_loader {
+ };
+ 
+ struct vision_ctx * vision_init(const char * fname, struct vision_context_params ctx_params) {
+-    g_logger_state.verbosity_thold = ctx_params.verbosity;
++    omni_g_logger_state.verbosity_thold = ctx_params.verbosity;
+     vision_ctx * ctx_vision = nullptr;
+ 
+     try {
+diff --git a/tools/server/CMakeLists.txt b/tools/server/CMakeLists.txt
+index 7b4d40d..a71a310 100644
+--- a/tools/server/CMakeLists.txt
++++ b/tools/server/CMakeLists.txt
+@@ -74,3 +74,13 @@ target_compile_features(${TARGET_VOXCPM2} PRIVATE cxx_std_17)
+ target_include_directories(${TARGET_VOXCPM2} PRIVATE ${CMAKE_SOURCE_DIR})
+ target_include_directories(${TARGET_VOXCPM2} PRIVATE ${CMAKE_SOURCE_DIR}/vendor/cpp-httplib)
+ target_include_directories(${TARGET_VOXCPM2} PRIVATE ${CMAKE_SOURCE_DIR}/vendor)
++
++# Application-owned headless OpenAI HTTP service; statically links the fork.
++add_executable(minicpm-server servllama-main.cpp server-http.cpp)
++target_include_directories(minicpm-server PRIVATE ${CMAKE_SOURCE_DIR}/vendor)
++target_link_libraries(minicpm-server PRIVATE server-context llama-common cpp-httplib ${CMAKE_THREAD_LIBS_INIT})
++target_compile_features(minicpm-server PRIVATE cxx_std_17)
++if(ANDROID)
++    target_link_options(minicpm-server PRIVATE -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384)
++    set_target_properties(minicpm-server PROPERTIES OUTPUT_NAME libminicpm-server.so)
++endif()
+diff --git a/tools/server/server-context.cpp b/tools/server/server-context.cpp
+index ef9e330..a5769fb 100644
+--- a/tools/server/server-context.cpp
++++ b/tools/server/server-context.cpp
+@@ -1522,7 +1522,6 @@ private:
+             return false;
+         }
+ 
+-        SLT_DBG(slot, "launching slot : %s\n", safe_json_to_str(slot.to_json()).c_str());
+ 
+         // initialize samplers
+         if (task.need_sampling()) {
+@@ -1698,7 +1697,6 @@ private:
+             SLT_DBG(slot, "%s", "stopped by EOS\n");
+         }
+ 
+-        SLT_DBG(slot, "n_decoded = %d, n_remaining = %d, next token: %5d '%s'\n", slot.n_decoded, slot.n_remaining, result.tok, token_str.c_str());
+ 
+         return slot.has_next_token; // continue
+     }
+@@ -1770,7 +1768,7 @@ private:
+     }
+ 
+     void send_error(const int id_task, const std::string & error, const enum error_type type = ERROR_TYPE_SERVER, const int32_t n_prompt_tokens = 0, const int32_t n_ctx = 0) {
+-        SRV_ERR("task id = %d, error: %s\n", id_task, error.c_str());
++        SRV_ERR("task id = %d, error type: %d\n", id_task, (int) type);
+ 
+         if (type == ERROR_TYPE_EXCEED_CONTEXT_SIZE) {
+             GGML_ASSERT(n_ctx > 0 && n_prompt_tokens > 0);
+@@ -2788,12 +2786,10 @@ private:
+                         /*if (1) {
+                             // first 16 tokens (avoid flooding logs)
+                             for (int i = 0; i < std::min<int>(16, input_tokens.size()); i++) {
+-                                SLT_DBG(slot, "prompt token %3d: %6d '%s'\n", i, input_tokens[i], common_token_to_piece(ctx_tgt, input_tokens[i]).c_str());
+                             }
+                         } else {
+                             // all
+                             for (int i = 0; i < (int) input_tokens.size(); i++) {
+-                                SLT_DBG(slot, "prompt token %3d: %6d '%s'\n", i, input_tokens[i], common_token_to_piece(ctx_tgt, input_tokens[i]).c_str());
+                             }
+                         }*/
+ 
+@@ -2978,11 +2974,7 @@ private:
+                                         }
+                                     }
+ 
+-                                    SLT_WRN(slot, "%s\n", ss0.str().c_str());
+-                                    SLT_WRN(slot, "%s\n", ss1.str().c_str());
+ 
+-                                    SLT_WRN(slot, "%s\n", st0.str().c_str());
+-                                    SLT_WRN(slot, "%s\n", st1.str().c_str());
+                                 }
+ 
+                                 if (pos_min >= pos_min_thold) {
+@@ -3861,7 +3853,6 @@ std::unique_ptr<server_res_generator> server_routes::handle_completions_impl(
+ 
+         const auto & prompt = data.at("prompt");
+         // TODO: this log can become very long, put it behind a flag or think about a more compact format
+-        //SRV_DBG("Prompt: %s\n", prompt.is_string() ? prompt.get<std::string>().c_str() : prompt.dump(2).c_str());
+ 
+         // process prompt
+         std::vector<server_tokens> inputs;
+@@ -4476,7 +4467,6 @@ void server_routes::init_routes() {
+         std::vector<raw_buffer> files;
+         json body = server_chat_convert_responses_to_chatcmpl(json::parse(req.body));
+         SRV_DBG("%s\n", "Request converted: OpenAI Responses -> OpenAI Chat Completions");
+-        SRV_DBG("converted request: %s\n", body.dump().c_str());
+         json body_parsed = oaicompat_chat_params_parse(
+             body,
+             meta->chat_params,
+@@ -4504,7 +4494,6 @@ void server_routes::init_routes() {
+             req.files,
+             files);
+         SRV_DBG("%s\n", "Request converted: OpenAI Transcriptions -> OpenAI Chat Completions");
+-        SRV_DBG("converted request: %s\n", body.dump().c_str());
+         json body_parsed = oaicompat_chat_params_parse(
+             body,
+             meta->chat_params,
+@@ -4522,7 +4511,6 @@ void server_routes::init_routes() {
+         std::vector<raw_buffer> files;
+         json body = server_chat_convert_anthropic_to_oai(json::parse(req.body));
+         SRV_DBG("%s\n", "Request converted: Anthropic -> OpenAI Chat Completions");
+-        SRV_DBG("converted request: %s\n", body.dump().c_str());
+         json body_parsed = oaicompat_chat_params_parse(
+             body,
+             meta->chat_params,
+@@ -4540,7 +4528,6 @@ void server_routes::init_routes() {
+         std::vector<raw_buffer> files;
+         json body = server_chat_convert_anthropic_to_oai(json::parse(req.body));
+         SRV_DBG("%s\n", "Request converted: Anthropic -> OpenAI Chat Completions");
+-        SRV_DBG("converted request: %s\n", body.dump().c_str());
+         json body_parsed = oaicompat_chat_params_parse(
+             body,
+             meta->chat_params,
+diff --git a/tools/server/server-http.cpp b/tools/server/server-http.cpp
+index 3616b3b..65fb16e 100644
+--- a/tools/server/server-http.cpp
++++ b/tools/server/server-http.cpp
+@@ -42,8 +42,8 @@ static void log_server_request(const httplib::Request & req, const httplib::Resp
+ 
+     SRV_TRC("done request: %s %s %s %d\n", req.method.c_str(), req.path.c_str(), req.remote_addr.c_str(), res.status);
+ 
+-    SRV_DBG("request:  %s\n", req.body.c_str());
+-    SRV_DBG("response: %s\n", res.body.c_str());
++    // Do not log user prompts or API payloads.
++    // Do not log generated responses.
+ }
+ 
+ // For Google Cloud Platform deployment compatibility
+@@ -112,6 +112,7 @@ bool server_http_context::init(const common_params & params) {
+     srv.reset(new httplib::Server());
+ #endif
+ 
++    srv->set_payload_max_length(32 * 1024 * 1024); // Bounded multimodal HTTP request body
+     srv->set_default_headers({{"Server", "llama.cpp"}});
+     srv->set_logger(log_server_request);
+     srv->set_exception_handler([](const httplib::Request &, httplib::Response & res, const std::exception_ptr & ep) {
+@@ -128,7 +129,7 @@ bool server_http_context::init(const common_params & params) {
+ 
+         res.status = 500;
+         res.set_content(message, "text/plain");
+-        SRV_ERR("got exception: %s\n", message.c_str());
++        SRV_ERR("%s", "request processing exception (details returned to caller only)\n");
+     });
+ 
+     srv->set_error_handler([](const httplib::Request &, httplib::Response & res) {
+@@ -161,14 +162,6 @@ bool server_http_context::init(const common_params & params) {
+         }
+     });
+ 
+-    if (params.api_keys.size() == 1) {
+-        const auto key = params.api_keys[0];
+-        const std::string substr = key.substr(std::max(static_cast<int>(key.length() - 4), 0));
+-        SRV_INF("api_keys: ****%s\n", substr.c_str());
+-    } else if (params.api_keys.size() > 1) {
+-        SRV_INF("api_keys: %zu keys loaded\n", params.api_keys.size());
+-    }
+-
+     //
+     // Middlewares
+     //
+@@ -449,7 +442,7 @@ static void process_handler_response(server_http_req_ptr && request, server_http
+                 if (!sink.write(chunk.data(), chunk.size())) {
+                     return false;
+                 }
+-                SRV_DBG("http: streamed chunk: %s\n", chunk.c_str());
++                // Stream payloads are private.
+             }
+             if (!has_next) {
+                 sink.done();
+@@ -471,7 +464,7 @@ static void process_handler_response(server_http_req_ptr && request, server_http
+ 
+ void server_http_context::get(const std::string & path, const server_http_context::handler_t & handler) const {
+     handlers.emplace(path, handler);
+-    pimpl->srv->Get(path_prefix + path, [handler](const httplib::Request & req, httplib::Response & res) {
++    pimpl->srv->Get(path_prefix + path, [this, handler](const httplib::Request & req, httplib::Response & res) {
+         server_http_req_ptr request = std::make_unique<server_http_req>(server_http_req{
+             get_params(req),
+             get_headers(req),
+@@ -479,7 +472,7 @@ void server_http_context::get(const std::string & path, const server_http_contex
+             build_query_string(req),
+             req.body,
+             {},
+-            req.is_connection_closed
++            [this, closed = req.is_connection_closed]() { return !is_ready.load() || closed(); }
+         });
+         server_http_res_ptr response = handler(*request);
+         process_handler_response(std::move(request), response, res);
+@@ -488,7 +481,7 @@ void server_http_context::get(const std::string & path, const server_http_contex
+ 
+ void server_http_context::post(const std::string & path, const server_http_context::handler_t & handler) const {
+     handlers.emplace(path, handler);
+-    pimpl->srv->Post(path_prefix + path, [handler](const httplib::Request & req, httplib::Response & res) {
++    pimpl->srv->Post(path_prefix + path, [this, handler](const httplib::Request & req, httplib::Response & res) {
+         std::string body = req.body;
+         std::map<std::string, uploaded_file> files;
+ 
+@@ -526,7 +519,7 @@ void server_http_context::post(const std::string & path, const server_http_conte
+             build_query_string(req),
+             body,
+             std::move(files),
+-            req.is_connection_closed
++            [this, closed = req.is_connection_closed]() { return !is_ready.load() || closed(); }
+         });
+         server_http_res_ptr response = handler(*request);
+         process_handler_response(std::move(request), response, res);
+diff --git a/tools/server/server-http.h b/tools/server/server-http.h
+index fede8c8..60df943 100644
+--- a/tools/server/server-http.h
++++ b/tools/server/server-http.h
+@@ -49,7 +49,7 @@ struct server_http_req {
+     std::string query_string; // query parameters string (e.g. "action=save")
+     std::string body;
+     std::map<std::string, uploaded_file> files; // used for file uploads (form data)
+-    const std::function<bool()> & should_stop;
++    std::function<bool()> should_stop;
+ 
+     std::string get_param(const std::string & key, const std::string & def = "") const {
+         auto it = params.find(key);
+diff --git a/tools/server/server-task.cpp b/tools/server/server-task.cpp
+index abc00c8..1239a9b 100644
+--- a/tools/server/server-task.cpp
++++ b/tools/server/server-task.cpp
+@@ -385,7 +385,6 @@ task_params server_task::params_from_json_cmpl(
+     if (data.contains("json_schema") && !data.contains("grammar")) {
+         try {
+             auto schema                  = json_value(data, "json_schema", json::object());
+-            SRV_DBG("JSON schema: %s\n", schema.dump(2).c_str());
+             std::string grammar_str      = json_schema_to_grammar(schema);
+             SRV_DBG("Converted grammar: %s\n", grammar_str.c_str());
+             params.sampling.grammar      = {COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT, std::move(grammar_str)};
+@@ -427,7 +426,6 @@ task_params server_task::params_from_json_cmpl(
+         params.chat_parser_params.reasoning_in_content = params.stream && (reasoning_format == COMMON_REASONING_FORMAT_DEEPSEEK_LEGACY);
+         params.chat_parser_params.generation_prompt = json_value(data, "generation_prompt", std::string());
+         params.sampling.generation_prompt = params.chat_parser_params.generation_prompt;
+-        SRV_DBG("Generation prompt: '%s'\n", params.chat_parser_params.generation_prompt.c_str());
+         params.chat_parser_params.parse_tool_calls = json_value(data, "parse_tool_calls", false);
+         if (data.contains("chat_parser")) {
+             params.chat_parser_params.parser.load(data.at("chat_parser").get<std::string>());

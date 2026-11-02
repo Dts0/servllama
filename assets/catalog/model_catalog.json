@@ -3,6 +3,22 @@
   "updatedAt": "2026-08-21",
   "entries": [
     {
+      "id": "minicpm-v-4.7-35b-a3b-les",
+      "engine": "mini_cpm",
+      "displayName": "MiniCPM-V 4.7 35B-A3B · LES",
+      "vendor": "OpenBMB",
+      "parameterLabel": "35B-A3B",
+      "summary": "experimentalMiniCpmLes",
+      "capabilities": [
+        "chinese",
+        "vision"
+      ],
+      "sources": {
+        "huggingface": "tc-mb/MiniCPM-V-Apps-gguf"
+      },
+      "recommendedQuant": "mix_q3gud_im"
+    },
+    {
       "id": "qwen3.5-0.8b-gguf",
       "engine": "llama_cpp",
       "displayName": "Qwen3.5-0.8B",

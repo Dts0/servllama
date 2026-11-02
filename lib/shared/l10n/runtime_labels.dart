@@ -163,6 +163,8 @@ class RuntimeLabels {
   /// The catalog asset stores an ARB key so it can stay language-neutral.
   static String catalogSummary(AppLocalizations l10n, String summaryKey) {
     switch (summaryKey) {
+      case 'experimentalMiniCpmLes':
+        return l10n.catalogSummaryExperimentalMiniCpmLes;
       case 'verifiedSmallGeneralist':
         return l10n.catalogSummaryVerifiedSmallGeneralist;
       case 'verifiedEntryLevel':

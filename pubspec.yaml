@@ -105,6 +105,9 @@ flutter:
     - assets/licenses/llama-cpp-native.txt
     - assets/speech/catalog.json
     - assets/bin/llama_server_manifest.json
+    - assets/bin/minicpm_server_manifest.json
+    - assets/catalog/minicpm_les.json
+    - assets/licenses/minicpm-native.txt
     - assets/catalog/model_catalog.json
     - assets/ai-icons/
     - assets/licenses/lobe-icons.txt
